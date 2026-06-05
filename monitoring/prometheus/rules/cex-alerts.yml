@@ -1,0 +1,18 @@
+groups:
+  - name: cex
+    rules:
+      - alert: CexBackendDown
+        expr: up{job="cex-backend"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "CEX backend is unavailable" }
+      - alert: HighApiErrorRate
+        expr: sum(rate(cex_http_requests_total{status=~"5.."}[5m])) / sum(rate(cex_http_requests_total[5m])) > 0.02
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "API 5xx rate exceeds 2%" }
+      - alert: HighApiLatency
+        expr: histogram_quantile(0.99, sum(rate(cex_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "API p99 latency exceeds one second" }

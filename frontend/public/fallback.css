@@ -1,0 +1,133 @@
+/*
+ * Static development fallback.
+ * Next/Tailwind remains the primary stylesheet; these rules keep the terminal
+ * usable when a long-running dev server temporarily serves an empty layout.css.
+ */
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #070a0f;
+  color: #cbd5e1;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; min-height: 100%;
+  background:
+    radial-gradient(circle at 20% -10%, rgba(251,191,36,.12), transparent 34%),
+    radial-gradient(circle at 90% 10%, rgba(16,185,129,.08), transparent 28%),
+    #070a0f;
+  color: #cbd5e1;
+}
+button, input { font: inherit; }
+button { cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+
+.exchange-app { min-height: 100vh; background: transparent; color: #cbd5e1; }
+.exchange-header {
+  position: sticky; top: 0; z-index: 50; min-height: 64px; padding: 0 24px;
+  display: block; border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(9,12,18,.96); backdrop-filter: blur(18px);
+}
+.exchange-header > div { height: 64px; width: 100%; display: flex; align-items: center; gap: 24px; }
+.exchange-header nav { display: flex; align-items: center; gap: 4px; }
+.exchange-header nav a, .exchange-header nav button {
+  border: 0; border-radius: 8px; padding: 8px 12px; background: transparent; color: #94a3b8;
+}
+.exchange-header button { border-color: rgba(255,255,255,.1); }
+.mobile-menu {
+  display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; padding: 0 0 14px;
+}
+.mobile-menu a, .mobile-menu button {
+  border: 1px solid rgba(255,255,255,.06); border-radius: 10px; padding: 10px 12px;
+  background: rgba(255,255,255,.035); color: #cbd5e1; text-align: left;
+}
+.exchange-layout { display: flex; min-height: calc(100vh - 64px); }
+.exchange-rail {
+  width: 56px; flex: 0 0 56px; padding: 16px 0; display: flex; flex-direction: column;
+  align-items: center; gap: 12px; border-right: 1px solid rgba(255,255,255,.06); background: #090c12;
+}
+.exchange-main { min-width: 0; flex: 1; padding: 12px; }
+.exchange-top-grid { display: grid; grid-template-columns: 245px minmax(0,1fr) 290px; gap: 8px; }
+.exchange-bottom-grid { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 8px; margin-top: 8px; }
+
+.panel {
+  overflow: hidden; border: 1px solid rgba(255,255,255,.07); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)), #0b0f16;
+  color: #cbd5e1; box-shadow: 0 16px 50px rgba(0,0,0,.18);
+}
+.panel:hover { border-color: rgba(255,255,255,.11); }
+.panel-title {
+  min-height: 40px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06); color: #cbd5e1; font-size: 12px; font-weight: 500;
+}
+.icon-button {
+  width: 36px; height: 36px; display: inline-grid; place-items: center; border: 0; border-radius: 8px;
+  background: transparent; color: #64748b;
+}
+.icon-button:hover { background: rgba(255,255,255,.05); color: #e2e8f0; }
+
+.market-selector { min-height: 360px; }
+.market-selector input { border: 0; outline: 0; background: transparent; color: #e2e8f0; }
+.market-selector button { border: 0; background: transparent; color: inherit; }
+.market-selector button:hover { background: rgba(255,255,255,.035); }
+.ticker-strip { min-height: 86px; display: flex; align-items: center; gap: 28px; padding: 12px 20px; overflow-x: auto; }
+.ticker-strip > div { flex: 0 0 auto; }
+.price-chart { min-height: 390px; }
+.price-chart svg { width: 100%; height: 100%; }
+.order-book { min-height: 532px; }
+.order-book > div:not(.panel-title), .recent-trades > div:not(.panel-title) { line-height: 1.3; }
+.trading-panel > div:last-child { display: flex; }
+.trading-panel form { flex: 1; padding: 12px 16px; }
+.trading-panel form + form { border-left: 1px solid rgba(255,255,255,.06); }
+.trading-panel input {
+  border: 0; outline: 0; background: transparent; color: #e2e8f0; font-family: ui-monospace, monospace;
+}
+.open-orders { min-height: 180px; }
+.recent-trades { min-height: 532px; }
+.auth-input {
+  display: block; width: 100%; margin-top: 8px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px; background: rgba(255,255,255,.035); color: #e2e8f0;
+}
+.auth-input:focus { outline: 0; border-color: rgba(251,191,36,.35); box-shadow: 0 0 0 3px rgba(251,191,36,.08); }
+.auth-label { display: block; margin-bottom: 16px; color: #64748b; font-size: 12px; }
+
+.product-app { min-height: 100vh; background: transparent; color: #cbd5e1; }
+.product-header { min-height: 64px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(9,12,18,.95); backdrop-filter: blur(18px); }
+.product-header > div { height: 64px; display: flex; align-items: center; padding: 0 20px; }
+.product-header nav { display: flex; align-items: center; gap: 4px; margin-left: 40px; }
+.product-header nav a { padding: 8px 12px; border-radius: 8px; color: #64748b; font-size: 14px; }
+.product-header nav a:hover { background: rgba(255,255,255,.05); color: #fff; }
+.product-mobile-menu { display: grid; gap: 8px; padding: 0 20px 16px; }
+.product-main { max-width: 1280px; margin: 0 auto; padding: 32px 16px; }
+.product-main h1 { margin: 0; color: #fff; font-size: 24px; font-weight: 600; }
+.product-main h1 + p { margin: 4px 0 32px; color: #64748b; font-size: 14px; }
+.hero-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px;
+  border: 1px solid rgba(255,255,255,.07); border-radius: 18px;
+  background: linear-gradient(135deg, rgba(251,191,36,.09), rgba(15,23,42,.25) 45%, rgba(16,185,129,.06));
+}
+.hero-card h1 + p { margin-bottom: 0; }
+.eyebrow { margin-bottom: 8px; color: #fbbf24; font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+.stat-card { padding: 20px; transition: transform .16s ease, border-color .16s ease; }
+.stat-card:hover { transform: translateY(-1px); border-color: rgba(251,191,36,.18); }
+.asset-row { transition: background .16s ease; }
+.asset-row:hover { background: rgba(255,255,255,.025); }
+button.rounded-lg, a.rounded-lg { transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease; }
+button.rounded-lg:hover, a.rounded-lg:hover { transform: translateY(-1px); }
+
+@media (max-width: 1199px) {
+  .exchange-top-grid { grid-template-columns: minmax(0,1fr) 290px; }
+  .market-selector { display: none; }
+}
+@media (max-width: 850px) {
+  .exchange-header { padding: 0 12px; }
+  .exchange-header nav, .exchange-rail { display: none; }
+  .exchange-main { padding: 8px; }
+  .exchange-top-grid, .exchange-bottom-grid { display: block; }
+  .order-book, .recent-trades, .trading-panel, .open-orders { margin-top: 8px; }
+  .ticker-strip { gap: 18px; }
+  .product-header nav { display: none; }
+  .product-header .product-mobile-menu { display: grid; }
+  .hero-card { padding: 18px; }
+}

@@ -1,0 +1,18 @@
+{
+  "title": "CEX Overview",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "targets": [{"expr": "sum(rate(cex_http_requests_total[5m])) by (status)"}],
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "type": "timeseries",
+      "title": "Trade Rate",
+      "targets": [{"expr": "sum(rate(cex_trades_total[5m])) by (pair)"}],
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+    }
+  ]
+}
