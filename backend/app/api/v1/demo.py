@@ -3,7 +3,7 @@ from decimal import Decimal
 import uuid
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user_id
@@ -14,40 +14,41 @@ from app.models.order import Order
 from app.models.user import User
 from app.models.wallet import UserWallet
 from app.services.wallet_service import reserve_order_funds
+from app.services.market_data_service import SUPPORTED_MARKETS, market_data_service
+from app.services.copy_trading_service import floor_to_step
 from app.utils.security import hash_password
 
 router = APIRouter()
 
-ASSETS = [
-    ("BTC", "Bitcoin", 8, Decimal("0.0001"), Decimal("0.001"), Decimal("10"), Decimal("0.0005"), 2),
-    ("ETH", "Ethereum", 18, Decimal("0.001"), Decimal("0.01"), Decimal("100"), Decimal("0.005"), 12),
-    ("USDT", "Tether", 2, Decimal("1"), Decimal("10"), Decimal("100000"), Decimal("1"), 1),
-    ("SOL", "Solana", 9, Decimal("0.01"), Decimal("0.1"), Decimal("1000"), Decimal("0.01"), 1),
-    ("ADA", "Cardano", 6, Decimal("1"), Decimal("1"), Decimal("100000"), Decimal("0.5"), 1),
+ASSETS = [("USDT", "Tether", 2, Decimal("1"), Decimal("10"), Decimal("100000"), Decimal("1"), 1)] + [
+    (market["base"], market["name"], 8, Decimal("0.0001"), Decimal("0.0001"), Decimal("100000"), Decimal("0"), 1)
+    for market in SUPPORTED_MARKETS
 ]
 
 PAIR_SPECS = [
-    ("BTCUSDT", "BTC", "USDT", 5, 2, Decimal("0.00001"), Decimal("1000"), Decimal("10"), Decimal("0.01"), Decimal("0.00001"), Decimal("68429.12")),
-    ("ETHUSDT", "ETH", "USDT", 4, 2, Decimal("0.0001"), Decimal("10000"), Decimal("10"), Decimal("0.01"), Decimal("0.0001"), Decimal("3641.87")),
-    ("SOLUSDT", "SOL", "USDT", 2, 2, Decimal("0.01"), Decimal("100000"), Decimal("10"), Decimal("0.01"), Decimal("0.01"), Decimal("172.46")),
-    ("ADAUSDT", "ADA", "USDT", 1, 4, Decimal("1"), Decimal("1000000"), Decimal("10"), Decimal("0.0001"), Decimal("1"), Decimal("0.4518")),
+    (
+        market["symbol"],
+        market["base"],
+        "USDT",
+        8,
+        2,
+        Decimal("0.000001"),
+        Decimal("1000000"),
+        Decimal("10"),
+        Decimal("0.00000001") if market["seed"] < Decimal("1") else Decimal("0.01"),
+        Decimal("0.000001"),
+        market["seed"],
+    )
+    for market in SUPPORTED_MARKETS
 ]
 
 USER_STARTER_BALANCES = {
-    "USDT": Decimal("50000"),
-    "BTC": Decimal("1.25"),
-    "ETH": Decimal("12"),
-    "SOL": Decimal("250"),
-    "ADA": Decimal("15000"),
+    "USDT": Decimal("100000"),
 }
 
-LIQUIDITY_BALANCES = {
-    "USDT": Decimal("100000000"),
-    "BTC": Decimal("200"),
-    "ETH": Decimal("5000"),
-    "SOL": Decimal("100000"),
-    "ADA": Decimal("20000000"),
-}
+LIQUIDITY_BALANCES = {"USDT": Decimal("1000000000")}
+for market in SUPPORTED_MARKETS:
+    LIQUIDITY_BALANCES[market["base"]] = Decimal("1000000")
 
 
 async def ensure_assets_and_pairs(db: AsyncSession) -> tuple[dict[str, Asset], dict[str, TradingPair]]:
@@ -104,7 +105,7 @@ async def ensure_wallet_balance(
     *,
     user_id: uuid.UUID,
     asset: Asset,
-    minimum_available: Decimal,
+    starting_available: Decimal,
 ) -> UserWallet:
     wallet = (
         await db.execute(
@@ -115,12 +116,32 @@ async def ensure_wallet_balance(
         wallet = UserWallet(
             user_id=user_id,
             asset_id=asset.id,
-            available=minimum_available,
+            available=starting_available,
             locked=Decimal("0"),
         )
         db.add(wallet)
-    elif wallet.available < minimum_available:
-        wallet.available = minimum_available
+    await db.flush()
+    return wallet
+
+
+async def reset_wallet_balance(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    asset: Asset,
+    available: Decimal,
+) -> UserWallet:
+    wallet = (
+        await db.execute(
+            select(UserWallet).where(UserWallet.user_id == user_id, UserWallet.asset_id == asset.id)
+        )
+    ).scalar_one_or_none()
+    if not wallet:
+        wallet = UserWallet(user_id=user_id, asset_id=asset.id, available=available, locked=Decimal("0"))
+        db.add(wallet)
+    else:
+        wallet.available = available
+        wallet.locked = Decimal("0")
         wallet.version += 1
     await db.flush()
     return wallet
@@ -227,25 +248,48 @@ async def bootstrap_demo(
 ):
     assets, pairs = await ensure_assets_and_pairs(db)
     for symbol, amount in USER_STARTER_BALANCES.items():
-        await ensure_wallet_balance(db, user_id=user_id, asset=assets[symbol], minimum_available=amount)
+        await ensure_wallet_balance(db, user_id=user_id, asset=assets[symbol], starting_available=amount)
 
     liquidity_user = await ensure_liquidity_user(db)
+    await db.execute(
+        update(Order).where(
+            Order.user_id == liquidity_user.id,
+            Order.client_order_id.like("demo-liq:%"),
+            Order.status.in_(("PENDING", "OPEN", "PARTIALLY_FILLED")),
+        ).values(
+            status="CANCELLED",
+        )
+    )
+    await db.flush()
+
     for symbol, amount in LIQUIDITY_BALANCES.items():
-        await ensure_wallet_balance(
+        await reset_wallet_balance(
             db,
             user_id=liquidity_user.id,
             asset=assets[symbol],
-            minimum_available=amount,
+            available=amount,
         )
 
     seeded_orders = 0
+    from app.api.v1 import trading
+
+    for symbol in pairs:
+        trading._engines.pop(symbol, None)
+
     for symbol, _, _, _, _, _, _, _, tick_size, step_size, mid in PAIR_SPECS:
         pair = pairs[symbol]
-        base_quantity = max(pair.min_qty, step_size * Decimal("1000"))
+        live_tick = market_data_service.get_tick(symbol)
+        mid = live_tick.price if live_tick else mid
+        base_quantity = floor_to_step(
+            max(pair.min_qty, pair.min_notional / mid if mid > 0 else pair.min_qty),
+            step_size,
+        )
+        if base_quantity < pair.min_qty:
+            base_quantity = pair.min_qty
         for index in range(1, 6):
-            bid_price = mid - (tick_size * Decimal(index * 25))
+            bid_price = max(tick_size, mid - (tick_size * Decimal(index * 25)))
             ask_price = mid + (tick_size * Decimal(index * 25))
-            quantity = base_quantity * Decimal(index)
+            quantity = floor_to_step(base_quantity * Decimal(index), step_size)
             if await ensure_liquidity_order(
                 db,
                 liquidity_user=liquidity_user,

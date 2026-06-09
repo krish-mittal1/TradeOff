@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models.asset import TradingPair
 from app.models.market import Candle
 from app.models.trade import Trade
+from app.services.market_data_service import market_data_service
 
 router = APIRouter()
 
@@ -89,7 +90,8 @@ async def get_ticker(
         raise HTTPException(status_code=404, detail="Trading pair not found")
     
     engine = get_engine(pair.upper())
-    last_price = engine.last_price
+    live_tick = market_data_service.get_tick(pair.upper())
+    last_price = live_tick.price if live_tick else engine.last_price
     best_bid = engine.best_bid
     best_ask = engine.best_ask
     
@@ -121,12 +123,12 @@ async def get_ticker(
         "price": str(last_price) if last_price else "0",
         "best_bid": str(best_bid) if best_bid else "0",
         "best_ask": str(best_ask) if best_ask else "0",
-        "high_24h": str(stats.high) if stats.high else "0",
-        "low_24h": str(stats.low) if stats.low else "0",
-        "volume_24h": str(stats.volume) if stats.volume else "0",
+        "high_24h": str(live_tick.high_24h) if live_tick and live_tick.high_24h else str(stats.high) if stats.high else "0",
+        "low_24h": str(live_tick.low_24h) if live_tick and live_tick.low_24h else str(stats.low) if stats.low else "0",
+        "volume_24h": str(live_tick.volume_24h) if live_tick else str(stats.volume) if stats.volume else "0",
         "quote_volume_24h": str(stats.quote_volume) if stats.quote_volume else "0",
         "change_24h": str(last_price - open_price) if last_price and open_price else "0",
-        "change_pct_24h": str((last_price - open_price) / open_price * 100) if last_price and open_price and open_price > 0 else "0",
+        "change_pct_24h": str(live_tick.change_pct_24h) if live_tick else str((last_price - open_price) / open_price * 100) if last_price and open_price and open_price > 0 else "0",
     }
 
 
@@ -170,11 +172,13 @@ async def get_all_tickers(db: AsyncSession = Depends(get_db)):
         try:
             from app.api.v1.trading import get_engine
             engine = get_engine(pair.symbol)
+            live_tick = market_data_service.get_tick(pair.symbol)
             tickers.append({
                 "symbol": pair.symbol,
-                "price": str(engine.last_price) if engine.last_price else "0",
+                "price": str(live_tick.price) if live_tick else str(engine.last_price) if engine.last_price else "0",
                 "best_bid": str(engine.best_bid) if engine.best_bid else "0",
                 "best_ask": str(engine.best_ask) if engine.best_ask else "0",
+                "change_pct_24h": str(live_tick.change_pct_24h) if live_tick else "0",
             })
         except Exception:
             tickers.append({

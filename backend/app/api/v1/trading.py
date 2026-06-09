@@ -105,24 +105,37 @@ async def persist_result(
     order_type: str,
     client_order_id: str | None = None,
 ) -> Order:
-    db_order = Order(
-        id=engine_order.order_id,
-        user_id=engine_order.user_id,
-        trading_pair_id=pair.id,
-        side=engine_order.side.value,
-        order_type=order_type,
-        time_in_force=engine_order.time_in_force.value,
-        price=engine_order.price,
-        stop_price=engine_order.stop_price,
-        quantity=engine_order.quantity,
-        filled_quantity=engine_order.filled_quantity,
-        quote_quantity=engine_order.quote_quantity,
-        iceberg_peak=engine_order.iceberg_peak,
-        status=engine_order.status.value,
-        client_order_id=client_order_id,
-        expires_at=engine_order.expires_at,
+    # Check if order already exists in the database
+    db_order_result = await db.execute(
+        select(Order).where(Order.id == engine_order.order_id)
     )
-    db.add(db_order)
+    db_order = db_order_result.scalar_one_or_none()
+
+    if not db_order:
+        db_order = Order(
+            id=engine_order.order_id,
+            user_id=engine_order.user_id,
+            trading_pair_id=pair.id,
+            side=engine_order.side.value,
+            order_type=order_type,
+            time_in_force=engine_order.time_in_force.value,
+            price=engine_order.price,
+            stop_price=engine_order.stop_price,
+            quantity=engine_order.quantity,
+            filled_quantity=engine_order.filled_quantity,
+            quote_quantity=engine_order.quote_quantity,
+            iceberg_peak=engine_order.iceberg_peak,
+            status=engine_order.status.value,
+            client_order_id=client_order_id,
+            expires_at=engine_order.expires_at,
+        )
+        db.add(db_order)
+    else:
+        db_order.status = engine_order.status.value
+        db_order.filled_quantity = engine_order.filled_quantity
+        db_order.order_type = order_type
+        db_order.version += 1
+
     await db.flush()
 
     producer = await get_kafka_producer()
@@ -176,6 +189,61 @@ async def persist_result(
             persist_result=persist_result,
         )
     return db_order
+
+
+async def process_triggered_stop_orders(db: AsyncSession, engine: MatchingEngine, pair: TradingPair) -> None:
+    """Recursively process triggered stop orders from the engine."""
+    while True:
+        pending = await engine.get_pending_stop_orders()
+        if not pending:
+            break
+        for stop_engine_order in pending:
+            # Get order from database
+            result = await db.execute(
+                select(Order).where(Order.id == stop_engine_order.order_id).with_for_update()
+            )
+            db_order = result.scalar_one_or_none()
+            if not db_order:
+                continue
+
+            # Update DB order status to TRIGGERED
+            db_order.status = "TRIGGERED"
+            db_order.version += 1
+            await db.flush()
+
+            # Publish trigger update
+            await manager.publish(f"orders.{db_order.user_id}", {
+                "type": "order", "order_id": str(db_order.id), "status": "TRIGGERED",
+                "filled_quantity": str(db_order.filled_quantity),
+            })
+
+            # Convert stop engine order to standard market/limit order
+            original_type = stop_engine_order.order_type
+            if original_type == OrderType.STOP_MARKET:
+                stop_engine_order.order_type = OrderType.MARKET
+                order_type_str = "MARKET"
+            elif original_type == OrderType.STOP_LIMIT:
+                stop_engine_order.order_type = OrderType.LIMIT
+                order_type_str = "LIMIT"
+            else:
+                continue
+
+            # Process the order in engine
+            match_result = await engine.process_order(stop_engine_order)
+
+            # Persist result (which handles trades, settlements, and publications)
+            await persist_result(
+                db, pair, stop_engine_order, match_result,
+                order_type=order_type_str, client_order_id=db_order.client_order_id
+            )
+
+            # If order gets filled/cancelled/rejected/expired, release remaining locked funds
+            if stop_engine_order.status.value in {"FILLED", "CANCELLED", "REJECTED", "EXPIRED"}:
+                await release_order_funds(
+                    db, user_id=db_order.user_id, pair=pair, side=db_order.side,
+                    remaining_quantity=stop_engine_order.remaining_quantity, price=db_order.price,
+                    remaining_quote=None, order_id=db_order.id, fee_rate=pair.taker_fee,
+                )
 
 
 def response_for(order: EngineOrder, result) -> dict:
@@ -240,6 +308,7 @@ async def place_market_order(
         db, user_id=user_id, pair=pair, side=side.value, remaining_quantity=order.remaining_quantity,
         price=reference_price, remaining_quote=None, order_id=order_id, fee_rate=pair.taker_fee,
     )
+    await process_triggered_stop_orders(db, engine, pair)
     return response_for(order, result)
 
 
@@ -277,6 +346,7 @@ async def place_limit_order(
             db, user_id=user_id, pair=pair, side=side.value, remaining_quantity=order.remaining_quantity,
             price=req.price, remaining_quote=None, order_id=order_id, fee_rate=pair.taker_fee,
         )
+    await process_triggered_stop_orders(db, get_engine(pair.symbol), pair)
     return response_for(order, result)
 
 

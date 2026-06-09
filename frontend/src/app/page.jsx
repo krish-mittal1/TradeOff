@@ -18,8 +18,16 @@ import { useWebSocket } from '@/providers/WebSocketProvider'
 const MARKET_SEED = [
   { symbol: 'BTCUSDT', base: 'BTC', price: 68429.12, change: 2.84, volume: '1.42B' },
   { symbol: 'ETHUSDT', base: 'ETH', price: 3641.87, change: 1.92, volume: '824.6M' },
+  { symbol: 'BNBUSDT', base: 'BNB', price: 612.40, change: 0.84, volume: '412.1M' },
   { symbol: 'SOLUSDT', base: 'SOL', price: 172.46, change: -0.74, volume: '318.2M' },
+  { symbol: 'XRPUSDT', base: 'XRP', price: 0.6245, change: 1.18, volume: '689.4M' },
   { symbol: 'ADAUSDT', base: 'ADA', price: 0.4518, change: 4.11, volume: '91.8M' },
+  { symbol: 'DOGEUSDT', base: 'DOGE', price: 0.1682, change: -1.03, volume: '211.5M' },
+  { symbol: 'AVAXUSDT', base: 'AVAX', price: 41.28, change: 2.06, volume: '122.7M' },
+  { symbol: 'LINKUSDT', base: 'LINK', price: 18.74, change: 0.58, volume: '98.4M' },
+  { symbol: 'DOTUSDT', base: 'DOT', price: 7.35, change: -0.22, volume: '76.2M' },
+  { symbol: 'MATICUSDT', base: 'MATIC', price: 0.7124, change: 1.47, volume: '64.9M' },
+  { symbol: 'LTCUSDT', base: 'LTC', price: 84.50, change: 0.31, volume: '54.1M' },
 ]
 
 const seedBook = (mid, side) => Array.from({ length: 11 }, (_, index) => {
@@ -40,6 +48,19 @@ const seedTrades = (mid) => Array.from({ length: 16 }, (_, index) => ({
 function formatPrice(value) {
   const number = Number(value || 0)
   return number >= 100 ? number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : number.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+}
+
+function stepDecimals(stepSize) {
+  const [, decimals = ''] = String(stepSize || '0.000001').split('.')
+  return decimals.replace(/0+$/, '').length
+}
+
+function floorToStep(value, stepSize = '0.000001') {
+  const number = Number(value || 0)
+  const step = Number(stepSize || 0.000001)
+  if (!Number.isFinite(number) || number <= 0 || !Number.isFinite(step) || step <= 0) return ''
+  const floored = Math.floor((number + Number.EPSILON) / step) * step
+  return floored.toFixed(stepDecimals(stepSize))
 }
 
 function Header({ onAuthOpen }) {
@@ -288,20 +309,33 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances = {} }
   const [price, setPrice] = useState(String(market.price))
   const [amount, setAmount] = useState('')
   const [stopPrice, setStopPrice] = useState('')
+  const stepSize = market.stepSize || '0.000001'
 
   useEffect(() => setPrice(String(market.price)), [market])
+
+  function applyPercent(percent) {
+    const latestPrice = Number(price || market.price)
+    if (side === 'BUY') {
+      const quoteBalance = Number(balances.USDT || 0)
+      if (!quoteBalance || !latestPrice) return setAmount('')
+      return setAmount(floorToStep((quoteBalance * percent) / 100 / latestPrice, stepSize))
+    }
+    const baseBalance = Number(balances[market.base] || 0)
+    return setAmount(floorToStep((baseBalance * percent) / 100, stepSize))
+  }
 
   async function submit(event) {
     event.preventDefault()
     if (!user) return onAuthOpen()
-    if (!amount || Number(amount) <= 0) return toast.error('Enter a valid amount')
+    const cleanAmount = floorToStep(amount, stepSize)
+    if (!cleanAmount || Number(cleanAmount) <= 0) return toast.error('Enter a valid amount')
     if (type === 'Stop' && (!stopPrice || Number(stopPrice) <= 0)) return toast.error('Enter a valid stop price')
     try {
       if (type === 'Market' && side === 'BUY') {
-        await tradingService.placeMarketOrder(market.symbol, side, '0', String(Number(amount) * Number(price)))
-      } else if (type === 'Market') await tradingService.placeMarketOrder(market.symbol, side, amount)
-      else if (type === 'Stop') await tradingService.placeStopOrder(market.symbol, side, stopPrice, amount, price)
-      else await tradingService.placeLimitOrder(market.symbol, side, price, amount)
+        await tradingService.placeMarketOrder(market.symbol, side, '0', String(Number(cleanAmount) * Number(price || market.price)))
+      } else if (type === 'Market') await tradingService.placeMarketOrder(market.symbol, side, cleanAmount)
+      else if (type === 'Stop') await tradingService.placeStopOrder(market.symbol, side, stopPrice, cleanAmount, price)
+      else await tradingService.placeLimitOrder(market.symbol, side, price, cleanAmount)
       toast.success(`${side === 'BUY' ? 'Buy' : 'Sell'} order submitted`)
       setAmount('')
       onOrderSubmitted?.()
@@ -323,7 +357,7 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances = {} }
       {type !== 'Market' && <Field label="Price" value={price} onChange={setPrice} suffix="USDT" />}
       <Field label="Amount" value={amount} onChange={setAmount} suffix={market.base} />
       <div className="my-4 flex items-center gap-2">
-        {[25, 50, 75, 100].map((value) => <button type="button" key={value} className="flex-1 rounded bg-white/[0.035] py-1 text-[10px] text-slate-600 hover:bg-white/[0.07] hover:text-slate-300">{value}%</button>)}
+        {[25, 50, 75, 100].map((value) => <button type="button" key={value} onClick={() => applyPercent(value)} className="flex-1 rounded bg-white/[0.035] py-1 text-[10px] text-slate-600 hover:bg-white/[0.07] hover:text-slate-300">{value}%</button>)}
       </div>
       <div className="mb-4 flex justify-between text-[11px] text-slate-600"><span>Total</span><span>{amount ? formatPrice(Number(amount) * Number(price)) : '0.00'} USDT</span></div>
       <button className={`w-full rounded-lg py-2.5 text-sm font-semibold text-white transition ${side === 'BUY' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-rose-500 hover:bg-rose-400'}`}>
@@ -426,23 +460,58 @@ export default function Home() {
   const [selected, setSelected] = useState(MARKET_SEED[0])
   const [authOpen, setAuthOpen] = useState(false)
   const [liveTrades, setLiveTrades] = useState([])
+  const [liveTickers, setLiveTickers] = useState({})
   const pairsQuery = useQuery({ queryKey: ['pairs'], queryFn: () => tradingService.getTradingPairs(), retry: 1 })
   const tickerQuery = useQuery({ queryKey: ['ticker', selected.symbol], queryFn: () => tradingService.getTicker(selected.symbol), retry: 1, refetchInterval: 5000 })
   const balancesQuery = useQuery({ queryKey: ['balances', user?.id], queryFn: () => walletService.getBalances(), enabled: !!user, retry: 1 })
   const ordersQuery = useQuery({ queryKey: ['open-orders', user?.id], queryFn: () => tradingService.getOrders({ status: 'OPEN', limit: 50 }), enabled: !!user, retry: 1 })
 
   const markets = useMemo(() => {
-    if (!pairsQuery.data?.length) return MARKET_SEED
-    return pairsQuery.data.map((pair) => MARKET_SEED.find((item) => item.symbol === pair.symbol) || { symbol: pair.symbol, base: pair.base_asset, price: 0, change: 0, volume: '0' })
-  }, [pairsQuery.data])
+    const source = pairsQuery.data?.length
+      ? pairsQuery.data.map((pair) => ({
+          ...(MARKET_SEED.find((item) => item.symbol === pair.symbol) || { symbol: pair.symbol, base: pair.base_asset, price: 0, change: 0, volume: '0' }),
+          base: pair.base_asset,
+          stepSize: pair.step_size,
+        }))
+      : MARKET_SEED
+    return source.map((marketItem) => {
+      const live = liveTickers[marketItem.symbol]
+      return live ? {
+        ...marketItem,
+        price: Number(live.price || marketItem.price),
+        change: Number(live.change_pct_24h || marketItem.change || 0),
+        volume: live.volume_24h && Number(live.volume_24h) > 0 ? Number(live.volume_24h).toLocaleString() : marketItem.volume,
+      } : marketItem
+    })
+  }, [pairsQuery.data, liveTickers])
 
-  const market = useMemo(() => tickerQuery.data?.price && Number(tickerQuery.data.price) > 0
-    ? { ...selected, price: Number(tickerQuery.data.price), change: Number(tickerQuery.data.change_pct_24h || selected.change) }
-    : selected, [selected, tickerQuery.data])
+  const market = useMemo(() => {
+    const selectedMarket = markets.find((item) => item.symbol === selected.symbol) || selected
+    const live = liveTickers[selectedMarket.symbol]
+    if (live) return { ...selectedMarket, price: Number(live.price), change: Number(live.change_pct_24h || selectedMarket.change || 0), volume: live.volume_24h || selectedMarket.volume }
+    return tickerQuery.data?.price && Number(tickerQuery.data.price) > 0
+      ? { ...selectedMarket, price: Number(tickerQuery.data.price), change: Number(tickerQuery.data.change_pct_24h || selectedMarket.change) }
+      : selectedMarket
+  }, [selected, markets, tickerQuery.data, liveTickers])
   const balances = useMemo(() => Object.fromEntries((balancesQuery.data?.balances || []).map((item) => [item.asset, item.available])), [balancesQuery.data])
   const { refetch: refetchTicker } = tickerQuery
+  const { refetch: refetchPairs } = pairsQuery
   const { refetch: refetchBalances } = balancesQuery
   const { refetch: refetchOrders } = ordersQuery
+
+  useEffect(() => {
+    if (!websocket) return undefined
+    return websocket.subscribe('market.tickers', (event) => {
+      const updates = event.tickers || []
+      setLiveTickers((current) => {
+        const next = { ...current }
+        updates.forEach((ticker) => {
+          next[ticker.symbol] = ticker
+        })
+        return next
+      })
+    })
+  }, [websocket])
 
   useEffect(() => {
     if (!websocket) return undefined
@@ -473,10 +542,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) return
-    pairsQuery.refetch()
-    tickerQuery.refetch()
-    balancesQuery.refetch()
-  }, [user])
+    refetchPairs()
+    refetchTicker()
+    refetchBalances()
+  }, [user, refetchPairs, refetchTicker, refetchBalances])
 
   async function cancelOrder(orderId) {
     try {

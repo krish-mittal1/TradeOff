@@ -1,14 +1,18 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownToLine, ArrowUpRight, PieChart } from 'lucide-react'
 import { ProductShell, StatCard, EmptyState, StatusPill } from '@/components/ProductShell'
 import { walletService } from '@/services/walletService'
+import { useWebSocket } from '@/providers/WebSocketProvider'
 
 export default function PortfolioPage() {
-  const { data } = useQuery({ queryKey: ['portfolio'], queryFn: () => walletService.getPortfolioSummary(), retry: 1 })
-  const allocationQuery = useQuery({ queryKey: ['allocation'], queryFn: () => walletService.getAllocation(), retry: 1 })
+  const websocket = useWebSocket()
+  const { data, refetch: refetchPortfolio } = useQuery({ queryKey: ['portfolio'], queryFn: () => walletService.getPortfolioSummary(), retry: 1, refetchInterval: 5000 })
+  const allocationQuery = useQuery({ queryKey: ['allocation'], queryFn: () => walletService.getAllocation(), retry: 1, refetchInterval: 5000 })
+  const { refetch: refetchAllocation } = allocationQuery
   const holdings = data?.holdings || []
   const total = Number(data?.total_balance_usd || 0)
   const allocation = allocationQuery.data?.allocation || holdings.map((item) => ({
@@ -16,6 +20,14 @@ export default function PortfolioPage() {
     percent: total ? (Number(item.usd_value || 0) / total) * 100 : 0,
     usd_value: item.usd_value,
   }))
+
+  useEffect(() => {
+    if (!websocket) return undefined
+    return websocket.subscribe('market.tickers', () => {
+      refetchPortfolio()
+      refetchAllocation()
+    })
+  }, [websocket, refetchPortfolio, refetchAllocation])
 
   return <ProductShell title="Portfolio" subtitle="Live valuation, allocation, and available balances.">
     <div className="grid gap-3 md:grid-cols-3">

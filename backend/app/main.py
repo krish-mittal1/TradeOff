@@ -18,9 +18,28 @@ from app.db.session import engine, async_session_factory
 from app.models import Base
 from app.observability import MetricsMiddleware, WS_CONNECTIONS
 from app.realtime.manager import manager
+from app.services.market_data_service import market_data_service
 from app.utils.security import verify_token
 
 logger = logging.getLogger(__name__)
+
+
+async def periodic_expire_orders():
+    """Background task to query and expire GTD orders periodically."""
+    from app.tasks.jobs import _expire_orders
+    import logging
+    task_logger = logging.getLogger("app.main.periodic_expire_orders")
+    
+    while True:
+        try:
+            await asyncio.sleep(60)
+            res = await _expire_orders()
+            if res.get("expired_count", 0) > 0:
+                task_logger.info(f"Expired {res['expired_count']} orders in periodic background task")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            task_logger.exception(f"Error in periodic_expire_orders task: {e}")
 
 
 @asynccontextmanager
@@ -33,6 +52,13 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created")
+
+    async with async_session_factory() as db:
+        from app.api.v1.demo import ensure_assets_and_pairs
+
+        await ensure_assets_and_pairs(db)
+        await db.commit()
+        logger.info("Demo market catalog ready")
 
     # Initialize Kafka producer
     from app.events.kafka_producer import get_kafka_producer
@@ -52,10 +78,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to connect to Redis: {e}")
 
+    await market_data_service.start()
+    logger.info("Market data service started")
+
+    # Start periodic order expiration
+    expire_task = asyncio.create_task(periodic_expire_orders())
+    logger.info("Periodic order expiration task started")
+
     yield
 
     # Shutdown
     logger.info("Shutting down...")
+    expire_task.cancel()
+    try:
+        await expire_task
+    except asyncio.CancelledError:
+        pass
+
+    await market_data_service.stop()
     try:
         producer = await get_kafka_producer()
         await producer.stop()

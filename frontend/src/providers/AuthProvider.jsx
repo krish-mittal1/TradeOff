@@ -42,6 +42,10 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (user) bootstrapDemo()
+  }, [user, bootstrapDemo])
+
   const login = useCallback(async (email, password, totpCode = null) => {
     const response = await authService.login(email, password, totpCode)
     localStorage.setItem('access_token', response.access_token)

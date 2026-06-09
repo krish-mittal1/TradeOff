@@ -34,14 +34,14 @@ class Order(UUIDMixin, TimestampMixin, Base):
 
     # Order state machine transitions
     VALID_TRANSITIONS = {
-        "PENDING": ["OPEN", "REJECTED", "CANCELLED"],
+        "PENDING": ["OPEN", "REJECTED", "CANCELLED", "TRIGGERED"],
         "OPEN": ["PARTIALLY_FILLED", "FILLED", "CANCELLED", "EXPIRED", "TRIGGERED"],
         "PARTIALLY_FILLED": ["OPEN", "FILLED", "CANCELLED"],
         "FILLED": [],
         "CANCELLED": [],
         "REJECTED": [],
         "EXPIRED": [],
-        "TRIGGERED": ["PENDING"],  # Stop order triggered → new pending order
+        "TRIGGERED": ["PENDING", "OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED"],
     }
 
     def can_transition_to(self, new_status: str) -> bool:

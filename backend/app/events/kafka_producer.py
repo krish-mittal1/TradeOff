@@ -21,7 +21,7 @@ class KafkaEventProducer:
 
     async def start(self):
         if self._producer is None:
-            self._producer = AIOKafkaProducer(
+            producer = AIOKafkaProducer(
                 bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
                 value_serializer=lambda v: json.dumps(v).encode(),
                 key_serializer=lambda k: str(k).encode(),
@@ -30,7 +30,16 @@ class KafkaEventProducer:
                 enable_idempotence=True,
                 compression_type="gzip",
             )
-            await self._producer.start()
+            try:
+                await producer.start()
+            except Exception:
+                try:
+                    await producer.stop()
+                except Exception:
+                    logger.debug("Kafka producer cleanup failed after startup error", exc_info=True)
+                self._producer = None
+                raise
+            self._producer = producer
             logger.info("Kafka producer started")
 
     async def stop(self):

@@ -1,12 +1,14 @@
 # TradeOff Exchange Simulator
 
-TradeOff is a portfolio-ready, production-style centralized crypto exchange simulator. It models spot
-trading, price-time priority matching, wallet reservation and settlement, portfolio
-analytics, risk controls, copy trading, notifications, realtime market streams, and
-operational infrastructure.
+TradeOff is a portfolio-ready, production-style crypto paper-trading exchange. It
+models signup-funded demo wallets, spot trading, price-time priority matching,
+wallet reservation and settlement, portfolio analytics, risk controls, copy trading,
+notifications, realtime market streams, and operational infrastructure.
 
 The frontend is JavaScript/JSX with Next.js 15 and React 19. The backend is FastAPI,
-SQLAlchemy 2, PostgreSQL/TimescaleDB, Redis, Kafka, Celery, and WebSockets.
+SQLAlchemy 2, PostgreSQL/TimescaleDB, Redis, Kafka, Celery, and WebSockets. Live
+crypto prices use Binance public market WebSockets with an automatic simulated
+fallback if Binance is unavailable.
 
 ## Quick Start
 

@@ -13,6 +13,7 @@
     "skipLibCheck": true,
     "strict": false,
     "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0",
     "noEmit": true,
     "incremental": true,
     "esModuleInterop": true,

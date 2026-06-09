@@ -11,6 +11,7 @@ from app.models.wallet import UserWallet
 from app.models.asset import Asset
 from app.models.trade import Trade
 from app.api.v1.dependencies import current_user_id
+from app.services.market_data_service import market_data_service
 
 router = APIRouter()
 
@@ -47,9 +48,11 @@ async def get_portfolio_summary(
         # Get price from engine if it's a base asset
         usd_value = Decimal("0")
         try:
+            live_tick = market_data_service.get_tick(f"{asset.symbol}USDT")
             pair_engine = get_engine(f"{asset.symbol}USDT")
-            if pair_engine.last_price:
-                usd_value = total * pair_engine.last_price
+            price = live_tick.price if live_tick else pair_engine.last_price
+            if price:
+                usd_value = total * price
         except Exception:
             pass
         
@@ -130,7 +133,8 @@ async def get_portfolio_allocation(
         allocations.append({
             "asset": h["asset"],
             "percentage": str(pct.quantize(Decimal("0.01"))),
+            "percent": str(pct.quantize(Decimal("0.01"))),
             "usd_value": h["usd_value"],
         })
     
-    return {"allocations": allocations}
+    return {"allocations": allocations, "allocation": allocations}
