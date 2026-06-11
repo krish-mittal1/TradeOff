@@ -1,4 +1,9 @@
 """TradeOff - FastAPI application factory."""
+import bcrypt
+# Workaround for passlib + bcrypt >= 4.0.0 compatibility
+if not hasattr(bcrypt, "__about__"):
+    bcrypt.__about__ = type("About", (object,), {"__version__": bcrypt.__version__})
+
 import asyncio
 import logging
 import json
