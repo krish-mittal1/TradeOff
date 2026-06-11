@@ -32,6 +32,7 @@ router = APIRouter()
 class RegisterRequest(BaseModel):
     email: str
     password: str
+    referral_code: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -75,13 +76,39 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
     if result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
     
+    # Generate unique referral code for new user
+    import random
+    import string
+    user_ref_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
     # Create user
     user = User(
         id=uuid.uuid4(),
         email=email,
         password_hash=hash_password(req.password),
         display_name=email.split("@")[0],
+        referral_code=user_ref_code,
     )
+    
+    # Process referral code if provided
+    if req.referral_code:
+        referrer_result = await db.execute(
+            select(User).where(User.referral_code == req.referral_code.strip().upper())
+        )
+        referrer = referrer_result.scalar_one_or_none()
+        if referrer:
+            user.referred_by = referrer.id
+            from decimal import Decimal
+            from app.models.referral import Referral
+            referral_record = Referral(
+                referrer_id=referrer.id,
+                referee_id=user.id,
+                reward=Decimal("50.00"),
+                tier="STANDARD",
+                status="COMPLETED",
+            )
+            db.add(referral_record)
+
     db.add(user)
     await db.flush()
 

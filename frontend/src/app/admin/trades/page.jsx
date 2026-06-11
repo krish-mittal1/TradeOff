@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { ProductShell, EmptyState, StatusPill } from '@/components/ProductShell'
 import { apiClient } from '@/services/api'
@@ -15,6 +16,12 @@ export default function AdminTradesPage() {
 
   return (
     <ProductShell title="Trade History" subtitle="Exchange-wide executed trades.">
+      <div className="mb-6 flex gap-4 border-b border-white/5 pb-3 text-xs">
+        <Link href="/admin" className="text-slate-500 hover:text-slate-300">Dashboard</Link>
+        <Link href="/admin/users" className="text-slate-500 hover:text-slate-300">Manage Users</Link>
+        <Link href="/admin/assets" className="text-slate-500 hover:text-slate-300">Trading Pairs</Link>
+        <Link href="/admin/trades" className="text-amber-400 font-semibold border-b border-amber-400 pb-3 -mb-3.5">Trade History</Link>
+      </div>
       <div className="panel overflow-hidden">
         <div className="panel-title">
           Recent Trades

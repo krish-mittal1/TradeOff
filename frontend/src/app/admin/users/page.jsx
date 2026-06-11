@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Users } from 'lucide-react'
@@ -36,6 +37,12 @@ export default function AdminUsersPage() {
 
   return (
     <ProductShell title="User Management" subtitle="View, suspend, and activate user accounts.">
+      <div className="mb-6 flex gap-4 border-b border-white/5 pb-3 text-xs">
+        <Link href="/admin" className="text-slate-500 hover:text-slate-300">Dashboard</Link>
+        <Link href="/admin/users" className="text-amber-400 font-semibold border-b border-amber-400 pb-3 -mb-3.5">Manage Users</Link>
+        <Link href="/admin/assets" className="text-slate-500 hover:text-slate-300">Trading Pairs</Link>
+        <Link href="/admin/trades" className="text-slate-500 hover:text-slate-300">Trade History</Link>
+      </div>
       <div className="panel overflow-hidden">
         <div className="panel-title">
           <span className="flex items-center gap-2">

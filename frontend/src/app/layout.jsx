@@ -5,8 +5,8 @@ import { ThemeProvider } from '@/providers/ThemeProvider'
 import { WebSocketProvider } from '@/providers/WebSocketProvider'
 
 export const metadata = {
-  title: 'TradeOff - Production-Style Exchange Simulator',
-  description: 'A portfolio-grade centralized exchange simulator with spot trading, wallets, risk controls, realtime market data, and admin operations.',
+  title: 'TradeOff — Production-Style Exchange Simulator',
+  description: 'A portfolio-grade centralized exchange simulator with spot trading, candlestick charts, wallets, realtime market data, and AI assistant.',
   icons: {
     icon: '/favicon.ico',
   },
@@ -14,11 +14,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="dark">
       <head>
-        <link rel="stylesheet" href="/fallback.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-screen bg-background font-sans antialiased">
+      <body className="min-h-screen bg-[#070a0f] font-sans antialiased">
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>

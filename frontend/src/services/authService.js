@@ -9,10 +9,11 @@ class AuthService {
     })
   }
 
-  async register(email, password) {
+  async register(email, password, referralCode = null) {
     return apiClient.post('/auth/register', {
       email,
       password,
+      referral_code: referralCode,
     })
   }
 

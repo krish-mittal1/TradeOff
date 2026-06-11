@@ -42,6 +42,108 @@ async def periodic_expire_orders():
             task_logger.exception(f"Error in periodic_expire_orders task: {e}")
 
 
+async def periodic_market_maker():
+    """Background task to periodically refresh order book liquidity."""
+    from decimal import Decimal
+    from app.api.v1.demo import (
+        ensure_assets_and_pairs,
+        ensure_liquidity_user,
+        reset_wallet_balance,
+        ensure_liquidity_order,
+        PAIR_SPECS,
+        LIQUIDITY_BALANCES,
+    )
+    from app.services.market_data_service import market_data_service
+    from app.models.order import Order
+    from app.api.v1.trading import get_engine
+    from app.core.matching_engine import OrderSide
+    from sqlalchemy import update
+    import logging
+    
+    task_logger = logging.getLogger("app.main.periodic_market_maker")
+    # Wait for startup dependencies to be fully ready
+    await asyncio.sleep(15)
+    
+    while True:
+        try:
+            async with async_session_factory() as db:
+                assets, pairs = await ensure_assets_and_pairs(db)
+                liquidity_user = await ensure_liquidity_user(db)
+                
+                # Cancel existing demo-liq orders to refresh them
+                await db.execute(
+                    update(Order).where(
+                        Order.user_id == liquidity_user.id,
+                        Order.client_order_id.like("demo-liq:%"),
+                        Order.status.in_(("PENDING", "OPEN", "PARTIALLY_FILLED")),
+                    ).values(
+                        status="CANCELLED",
+                    )
+                )
+                await db.flush()
+                
+                # Reset liquidity user balances
+                for symbol, amount in LIQUIDITY_BALANCES.items():
+                    await reset_wallet_balance(
+                        db,
+                        user_id=liquidity_user.id,
+                        asset=assets[symbol],
+                        available=amount,
+                    )
+                
+                # Clear existing in-memory matching engines to rebuild them clean
+                from app.api.v1 import trading
+                for symbol in pairs:
+                    trading._engines.pop(symbol, None)
+                
+                for symbol, _, _, _, _, _, _, _, tick_size, step_size, mid in PAIR_SPECS:
+                    pair = pairs[symbol]
+                    live_tick = market_data_service.get_tick(symbol)
+                    mid = live_tick.price if live_tick else mid
+                    
+                    from app.services.copy_trading_service import floor_to_step
+                    base_quantity = floor_to_step(
+                        max(pair.min_qty, pair.min_notional / mid if mid > 0 else pair.min_qty),
+                        step_size,
+                    )
+                    if base_quantity < pair.min_qty:
+                        base_quantity = pair.min_qty
+                        
+                    for index in range(1, 6):
+                        bid_price = max(tick_size, mid - (tick_size * Decimal(index * 25)))
+                        ask_price = mid + (tick_size * Decimal(index * 25))
+                        quantity = floor_to_step(base_quantity * Decimal(index), step_size)
+                        
+                        await ensure_liquidity_order(
+                            db,
+                            liquidity_user=liquidity_user,
+                            pair=pair,
+                            side=OrderSide.BUY,
+                            price=bid_price,
+                            quantity=quantity,
+                            client_order_id=f"demo-liq:{symbol}:bid:{index}",
+                        )
+                        await ensure_liquidity_order(
+                            db,
+                            liquidity_user=liquidity_user,
+                            pair=pair,
+                            side=OrderSide.SELL,
+                            price=ask_price,
+                            quantity=quantity,
+                            client_order_id=f"demo-liq:{symbol}:ask:{index}",
+                        )
+                    
+                    get_engine(symbol).order_book.last_trade_price = mid
+                
+                await db.commit()
+                task_logger.debug("Successfully refreshed order book liquidity.")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            task_logger.exception(f"Error in periodic_market_maker task: {e}")
+            
+        await asyncio.sleep(30)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
@@ -85,14 +187,19 @@ async def lifespan(app: FastAPI):
     expire_task = asyncio.create_task(periodic_expire_orders())
     logger.info("Periodic order expiration task started")
 
+    # Start periodic market maker
+    mm_task = asyncio.create_task(periodic_market_maker())
+    logger.info("Periodic market maker task started")
+
     yield
 
     # Shutdown
     logger.info("Shutting down...")
     expire_task.cancel()
+    mm_task.cancel()
     try:
-        await expire_task
-    except asyncio.CancelledError:
+        await asyncio.gather(expire_task, mm_task, return_exceptions=True)
+    except Exception:
         pass
 
     await market_data_service.stop()

@@ -50,3 +50,7 @@ logs/
 # Uploads
 uploads/
 media/
+
+# Celery
+celerybeat-schedule*
+

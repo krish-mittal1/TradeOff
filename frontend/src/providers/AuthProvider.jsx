@@ -56,8 +56,8 @@ export function AuthProvider({ children }) {
     return response
   }, [bootstrapDemo])
 
-  const register = useCallback(async (email, password) => {
-    const response = await authService.register(email, password)
+  const register = useCallback(async (email, password, referralCode = null) => {
+    const response = await authService.register(email, password, referralCode)
     localStorage.setItem('access_token', response.access_token)
     localStorage.setItem('refresh_token', response.refresh_token)
     const payload = JSON.parse(atob(response.access_token.split('.')[1]))

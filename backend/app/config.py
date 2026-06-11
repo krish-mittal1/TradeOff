@@ -49,9 +49,9 @@ class Settings(BaseSettings):
     # Security
     BCRYPT_ROUNDS: int = 12
     CORS_ORIGINS: str = '["http://localhost:3000"]'
-    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_REQUESTS: int = 10000
     RATE_LIMIT_WINDOW: int = 60
-    RATE_LIMIT_AUTH_REQUESTS: int = 5
+    RATE_LIMIT_AUTH_REQUESTS: int = 10000
     RATE_LIMIT_AUTH_WINDOW: int = 60
 
     # Elasticsearch

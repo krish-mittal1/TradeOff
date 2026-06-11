@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Activity, DatabaseZap, ShieldCheck, Users } from 'lucide-react'
@@ -26,6 +27,12 @@ export default function AdminPage() {
   }
 
   return <ProductShell title="Admin" subtitle="User operations, risk review, and exchange oversight.">
+    <div className="mb-6 flex gap-4 border-b border-white/5 pb-3 text-xs">
+      <Link href="/admin" className="text-amber-400 font-semibold border-b border-amber-400 pb-3 -mb-3.5">Dashboard</Link>
+      <Link href="/admin/users" className="text-slate-500 hover:text-slate-300">Manage Users</Link>
+      <Link href="/admin/assets" className="text-slate-500 hover:text-slate-300">Trading Pairs</Link>
+      <Link href="/admin/trades" className="text-slate-500 hover:text-slate-300">Trade History</Link>
+    </div>
     <div className="mb-4 grid gap-3 md:grid-cols-3">
       <button onClick={reconcile} className="panel stat-card flex items-center justify-between p-5 text-left text-sm text-amber-400 hover:border-amber-400/30">
         <span><span className="block text-xs uppercase tracking-[0.16em] text-slate-500">Operations</span><span className="mt-3 block text-xl font-semibold text-white">Run reconciliation</span></span>

@@ -140,7 +140,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
     volumes:
       - ./backend:/app
-    command: celery -A app.tasks.celery_app worker -l info -Q default,settlement,notifications,analytics
+    command: celery -A app.tasks.celery_app worker --beat -l info -Q default,settlement,notifications,analytics
     logging: *default-logging
 
   frontend:

@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { useAuth } from '@/providers/AuthProvider'
 
 const WebSocketContext = createContext(null)
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws'
@@ -10,6 +11,8 @@ export function useWebSocket() {
 }
 
 export function WebSocketProvider({ children }) {
+  const auth = useAuth()
+  const user = auth?.user
   const wsRef = useRef(null)
   const [connected, setConnected] = useState(false)
   const subscriptionsRef = useRef(new Map())
@@ -64,7 +67,7 @@ export function WebSocketProvider({ children }) {
         clearTimeout(reconnectTimeoutRef.current)
       }
     }
-  }, [connect])
+  }, [connect, user?.id])
 
   const subscribe = useCallback((channel, handler) => {
     if (!subscriptionsRef.current.has(channel)) {

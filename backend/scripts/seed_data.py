@@ -100,7 +100,11 @@ async def seed():
             UserWallet(user_id=users[1].id, asset_id=btc_id, available=Decimal("0.5"), locked=Decimal("0")),
             UserWallet(user_id=users[1].id, asset_id=usdt_id, available=Decimal("5000.0"), locked=Decimal("0")),
             # Admin
-            UserWallet(user_id=users[2].id, asset_id=usdt_id, available=Decimal("100000.0"), locked=Decimal("0")),
+            UserWallet(user_id=users[2].id, asset_id=btc_id, available=Decimal("1000.0"), locked=Decimal("0")),
+            UserWallet(user_id=users[2].id, asset_id=eth_id, available=Decimal("10000.0"), locked=Decimal("0")),
+            UserWallet(user_id=users[2].id, asset_id=usdt_id, available=Decimal("100000000.0"), locked=Decimal("0")),
+            UserWallet(user_id=users[2].id, asset_id=sol_id, available=Decimal("100000.0"), locked=Decimal("0")),
+            UserWallet(user_id=users[2].id, asset_id=ada_id, available=Decimal("1000000.0"), locked=Decimal("0")),
         ]
         db.add_all(wallets)
         

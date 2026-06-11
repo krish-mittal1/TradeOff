@@ -1,143 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --background: 222 47% 4%;
+    --foreground: 213 31% 85%;
+    --card: 222 47% 6%;
+    --card-foreground: 213 31% 85%;
+    --popover: 222 47% 6%;
+    --popover-foreground: 213 31% 85%;
+    --primary: 38 100% 56%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 213 31% 85%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 213 31% 85%;
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 213 31% 85%;
+    --border: 217 33% 12%;
+    --input: 217 33% 12%;
+    --ring: 38 100% 56%;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: 222 47% 4%;
+    --foreground: 213 31% 85%;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
+
+  html,
   body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    height: 100%;
   }
-  button, input {
+
+  body {
+    background-color: #070a0f;
+    color: #cbd5e1;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input {
     @apply outline-none;
   }
 }
 
 @layer components {
+  /* ── Panel ──────────────────────────────────────── */
   .panel {
-    @apply rounded-lg border border-white/5 bg-[#0b0f16];
+    @apply rounded-xl border border-white/5 bg-[#0b0f16];
   }
 
   .panel-title {
-    @apply flex h-10 items-center justify-between border-b border-white/5 px-3 text-xs font-medium text-slate-300;
+    @apply flex h-10 shrink-0 items-center justify-between border-b border-white/5 px-3 text-xs font-medium text-slate-300;
   }
 
+  /* ── Icon button ────────────────────────────────── */
   .icon-button {
     @apply grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-white/5 hover:text-slate-200;
   }
 
+  /* ── Auth inputs ────────────────────────────────── */
   .auth-label {
-    @apply mb-4 block text-xs text-slate-500;
+    @apply block text-xs text-slate-500;
   }
 
   .auth-input {
-    @apply mt-2 block w-full rounded-lg border border-white/5 bg-white/[0.035] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-700 focus:border-amber-400/30 focus:ring-0;
+    @apply mt-2 block w-full rounded-lg border border-white/5 bg-white/[0.035] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-amber-400/30 focus:ring-0;
+  }
+
+  /* ── Stat card ──────────────────────────────────── */
+  .stat-card {
+    @apply rounded-xl border border-white/5 bg-[#0b0f16];
+  }
+
+  /* ── Asset row hover ────────────────────────────── */
+  .asset-row {
+    @apply transition hover:bg-white/[0.025];
+  }
+
+  /* ── Hero card (product shell) ──────────────────── */
+  .hero-card {
+    @apply flex items-center justify-between rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.025] to-white/[0.01] px-6 py-5;
+  }
+
+  .eyebrow {
+    @apply mb-1 text-[11px] uppercase tracking-[0.2em] text-amber-400/70;
   }
 }
 
-/* Custom scrollbar for order book */
-.scrollbar-thin::-webkit-scrollbar {
+/* ── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
 
-/* Order book flash animations */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Flash animations (order book) ─────────────────── */
 @keyframes flash-green {
-  0% { background-color: rgba(34, 197, 94, 0.15); }
+  0% { background-color: rgba(34, 197, 94, 0.18); }
   100% { background-color: transparent; }
 }
 
 @keyframes flash-red {
-  0% { background-color: rgba(239, 68, 68, 0.15); }
+  0% { background-color: rgba(239, 68, 68, 0.18); }
   100% { background-color: transparent; }
 }
 
-.flash-green {
-  animation: flash-green 0.5s ease-out;
+.flash-green { animation: flash-green 0.5s ease-out; }
+.flash-red   { animation: flash-red 0.5s ease-out; }
+
+/* ── Slide-up animation ─────────────────────────────── */
+@keyframes slide-up {
+  from { transform: translateY(6px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
 }
 
-.flash-red {
-  animation: flash-red 0.5s ease-out;
-}
+.animate-slide-up { animation: slide-up 0.2s ease-out; }
 
-/* Price movement indicators */
-.price-up {
-  color: #22c55e;
-}
-
-.price-down {
-  color: #ef4444;
-}
-
-/* TradingView chart container */
-.tv-lightweight-charts {
+/* ── lightweight-charts: make it fill parent ────────── */
+.tv-lightweight-charts,
+.tv-lightweight-charts canvas {
   width: 100% !important;
-  height: 100% !important;
-}
-
-/* Order book depth bars */
-.depth-bar-buy {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.15), transparent);
-}
-
-.depth-bar-sell {
-  background: linear-gradient(270deg, rgba(239, 68, 68, 0.15), transparent);
 }
