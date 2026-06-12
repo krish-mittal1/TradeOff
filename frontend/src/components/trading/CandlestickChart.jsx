@@ -80,8 +80,8 @@ export function CandlestickChart({ market, candles: apiCandles }) {
         },
         handleScroll: { mouseWheel: true, pressedMouseMove: true },
         handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
-        width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight,
+        width: containerRef.current.clientWidth || 600,
+        height: containerRef.current.clientHeight || 360,
       })
 
       const candleSeries = chart.addCandlestickSeries({

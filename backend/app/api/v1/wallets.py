@@ -63,9 +63,9 @@ async def get_balances(
             {
                 "asset": asset.symbol,
                 "asset_name": asset.name,
-                "available": str(wallet.available),
-                "locked": str(wallet.locked),
-                "total": str(wallet.available + wallet.locked),
+                "available": format(wallet.available, 'f'),
+                "locked": format(wallet.locked, 'f'),
+                "total": format(wallet.available + wallet.locked, 'f'),
             }
             for wallet, asset in result.all()
         ]
@@ -89,9 +89,9 @@ async def get_balance(
     wallet, asset = row
     return {
         "asset": asset.symbol,
-        "available": str(wallet.available),
-        "locked": str(wallet.locked),
-        "total": str(wallet.available + wallet.locked),
+        "available": format(wallet.available, 'f'),
+        "locked": format(wallet.locked, 'f'),
+        "total": format(wallet.available + wallet.locked, 'f'),
     }
 
 

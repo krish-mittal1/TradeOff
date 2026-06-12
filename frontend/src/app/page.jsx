@@ -360,7 +360,7 @@ function PriceChart({ market, candles }) {
           <span>Candles</span>
         </div>
       </div>
-      <div className="flex-1 px-2 pb-2 pt-0" style={{ minHeight: 360 }}>
+      <div className="flex-1 px-2 pb-2 pt-0" style={{ height: 360 }}>
         <CandlestickChart market={market} candles={candles} />
       </div>
     </section>

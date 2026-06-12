@@ -23,15 +23,59 @@ class FollowRequest(BaseModel):
 
 @router.get("/leaderboard")
 async def leaderboard(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User.id, User.display_name, func.count(Trade.id).label("trades"), func.coalesce(func.sum(Trade.quote_quantity), 0).label("volume"))
-        .join(Trade, (Trade.taker_user_id == User.id) | (Trade.maker_user_id == User.id), isouter=True)
-        .group_by(User.id).order_by(func.coalesce(func.sum(Trade.quote_quantity), 0).desc()).limit(50)
+    from app.models.asset import TradingPair
+    from sqlalchemy import case, literal
+
+    # Get trade stats per user: volume, trade count, and a rough PnL estimate
+    # PnL = sum of sell proceeds - sum of buy costs (from taker perspective)
+    taker_result = await db.execute(
+        select(
+            Trade.taker_user_id.label("user_id"),
+            func.count(Trade.id).label("trade_count"),
+            func.coalesce(func.sum(Trade.quote_quantity), Decimal("0")).label("volume"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Trade.taker_side == "SELL", Trade.quote_quantity),
+                        else_=-Trade.quote_quantity,
+                    )
+                ),
+                Decimal("0"),
+            ).label("pnl"),
+        )
+        .group_by(Trade.taker_user_id)
     )
-    return {"leaders": [
-        {"user_id": str(row.id), "display_name": row.display_name, "trades": row.trades, "volume": str(row.volume)}
-        for row in result.all()
-    ]}
+    taker_rows = {row.user_id: row for row in taker_result.all()}
+
+    result = await db.execute(
+        select(User.id, User.display_name)
+        .order_by(User.display_name)
+        .limit(50)
+    )
+    users = result.all()
+
+    leaders = []
+    for user in users:
+        row = taker_rows.get(user.id)
+        trades = int(row.trade_count) if row else 0
+        volume = float(row.volume) if row else 0.0
+        pnl = float(row.pnl) if row else 0.0
+        # ROI = pnl / total_buy_cost * 100; approximate with pnl/volume*100 when volume > 0
+        roi = round((pnl / volume * 100), 2) if volume > 0 else 0.0
+        leaders.append({
+            "user_id": str(user.id),
+            "display_name": user.display_name,
+            "trades": trades,
+            "volume": round(volume, 2),
+            "pnl": round(pnl, 2),
+            "roi": roi,
+            "followers": 0,
+        })
+
+    # Sort by volume descending
+    leaders.sort(key=lambda x: x["volume"], reverse=True)
+    return {"leaders": leaders}
+
 
 
 @router.post("/leaders/{leader_id}/follow")

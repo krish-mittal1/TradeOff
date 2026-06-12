@@ -38,7 +38,7 @@ function LeaderCard({ leader, rank }) {
       <div className="grid grid-cols-3 gap-3 rounded-xl bg-white/[0.025] p-3">
         <div className="text-center">
           <div className="text-[10px] text-slate-500 uppercase tracking-wide">ROI</div>
-          <div className="mt-1 text-sm font-bold text-emerald-400">+{leader.roi?.toFixed(1) || leader.pnl?.toFixed(1)}%</div>
+          <div className="mt-1 text-sm font-bold text-emerald-400">+{((leader.roi ?? leader.pnl) || 0).toFixed(1)}%</div>
         </div>
         <div className="text-center border-x border-white/5">
           <div className="text-[10px] text-slate-500 uppercase tracking-wide">Trades</div>
@@ -78,7 +78,7 @@ export default function CopyTradingPage() {
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <div className="panel p-4">
           <div className="text-[11px] uppercase tracking-widest text-slate-500">Top Trader ROI</div>
-          <div className="mt-2 text-2xl font-bold text-emerald-400">+{(topByRoi[0]?.roi || topByRoi[0]?.pnl || 0).toFixed(1)}%</div>
+          <div className="mt-2 text-2xl font-bold text-emerald-400">+{((topByRoi[0]?.roi ?? topByRoi[0]?.pnl) || 0).toFixed(1)}%</div>
           <div className="mt-1 text-xs text-slate-600">30-day performance</div>
         </div>
         <div className="panel p-4">
