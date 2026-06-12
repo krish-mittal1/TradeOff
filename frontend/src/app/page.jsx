@@ -62,7 +62,7 @@ const seedTrades = (mid) => Array.from({ length: 20 }, (_, i) => ({
   price: mid + ((i % 5) - 2) * 3.17,
   amount: ((i * 13) % 47 + 2) / 1000,
   side: i % 3 === 0 ? 'sell' : 'buy',
-  time: `${String(Math.floor(Date.now() / 1000 / 60) % 24).padStart(2, '0')}:${String(Math.floor(Date.now() / 1000 % 3600 / 60) % 60).padStart(2, '0')}:${String((60 - i * 3) % 60).padStart(2, '0')}`,
+  time: `${String(11).padStart(2, '0')}:${String(30 + Math.floor(i / 2)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}`,
 }))
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -554,7 +554,7 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
       </div>
       <div className="mb-2 flex items-center justify-between rounded-lg bg-white/[0.02] px-3 py-2 text-[11px]">
         <span className="text-slate-500">Available</span>
-        <span className="font-mono text-slate-300">
+        <span className="font-mono text-slate-300" suppressHydrationWarning>
           {side === 'BUY'
             ? `${usdBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
             : `${baseBalance.toFixed(6)} ${market.base}`}
@@ -1000,7 +1000,7 @@ export default function Home() {
             {/* Center: Ticker + Chart */}
             <div className="flex min-w-0 flex-col gap-2 min-h-0">
               <TickerStrip market={market} livePrice={livePrice} />
-              <div className="flex-1 min-h-0 overflow-hidden">
+              <div style={{ height: 'calc(100vh - 450px)', minHeight: 240 }}>
                 <PriceChart market={market} candles={candles} />
               </div>
             </div>
