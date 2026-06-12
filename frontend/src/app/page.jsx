@@ -339,7 +339,7 @@ function PriceChart({ market, candles }) {
   const [tab, setTab] = useState('1m')
   const tabs = ['1m', '5m', '15m', '1H', '4H', '1D']
   return (
-    <section className="panel price-chart flex flex-col overflow-hidden" style={{ minHeight: 400 }}>
+    <section className="panel price-chart flex flex-col overflow-hidden h-full">
       <div className="panel-title">
         <div className="flex items-center gap-3">
           <span>Chart</span>
@@ -360,7 +360,7 @@ function PriceChart({ market, candles }) {
           <span>Candles</span>
         </div>
       </div>
-      <div className="flex-1 px-2 pb-2 pt-0" style={{ height: 360 }}>
+      <div className="flex-1 px-2 pb-2 pt-0 min-h-0">
         <CandlestickChart market={market} candles={candles} />
       </div>
     </section>
@@ -402,7 +402,7 @@ function OrderBook({ market, depth }) {
   )
 
   return (
-    <section className="panel order-book flex flex-col overflow-hidden" style={{ minHeight: 500 }}>
+    <section className="panel order-book flex flex-col overflow-hidden h-full">
       <div className="panel-title">
         <span>Order Book</span>
         <span className="text-[10px] text-slate-600">0.10 USDT</span>
@@ -444,8 +444,8 @@ function RecentTrades({ market, tradesList }) {
         {trades.map((t, i) => (
           <div key={t.id ?? i} className="grid grid-cols-3 px-3 py-[4px] font-mono text-[11px] hover:bg-white/[0.025]">
             <span className={t.side === 'buy' ? 'text-emerald-400' : 'text-rose-400'}>{formatPrice(t.price)}</span>
-            <span className="text-right text-slate-400">{Number(t.amount).toFixed(5)}</span>
-            <span className="text-right text-slate-600">{t.time}</span>
+            <span className="text-right text-slate-400">{(isNaN(Number(t.amount)) ? 0 : Number(t.amount)).toFixed(5)}</span>
+            <span className="text-right text-slate-600">{t.time ?? '—'}</span>
           </div>
         ))}
       </div>
@@ -1000,7 +1000,7 @@ export default function Home() {
             {/* Center: Ticker + Chart */}
             <div className="flex min-w-0 flex-col gap-2 min-h-0">
               <TickerStrip market={market} livePrice={livePrice} />
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <PriceChart market={market} candles={candles} />
               </div>
             </div>

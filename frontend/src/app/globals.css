@@ -149,4 +149,5 @@
 .tv-lightweight-charts,
 .tv-lightweight-charts canvas {
   width: 100% !important;
+  height: 100% !important;
 }

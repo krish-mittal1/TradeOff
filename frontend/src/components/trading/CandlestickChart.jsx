@@ -161,5 +161,5 @@ export function CandlestickChart({ market, candles: apiCandles }) {
     }
   }, [candleData])
 
-  return <div ref={containerRef} className="h-full w-full" />
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 }
