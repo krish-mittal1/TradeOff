@@ -1,6 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useMemo } from 'react'
+import { MARKET_SEED } from '@/lib/marketData'
+
+// Deterministic seed price for a given symbol (avoids flickering from live price changes)
+function getSeedPrice(symbol) {
+  return MARKET_SEED.find((m) => m.symbol === symbol)?.price || 1000
+}
 
 // Generate realistic OHLCV seed candles for a given base price
 function generateSeedCandles(basePrice, count = 120) {
@@ -9,15 +15,17 @@ function generateSeedCandles(basePrice, count = 120) {
   const interval = 60 // 1 minute in seconds
   let price = basePrice * 0.97
 
+  // Use a simple deterministic walk so candles don't re-randomize on re-render
   for (let i = count; i >= 0; i--) {
     const time = now - i * interval
     const open = price
     const volatility = basePrice * 0.0015
-    const change = (Math.random() - 0.48) * volatility + Math.sin(i * 0.3) * volatility * 0.5
+    // Deterministic oscillation + slight upward bias
+    const change = Math.sin(i * 0.37) * volatility * 0.7 + Math.cos(i * 0.19) * volatility * 0.4
     const close = Math.max(basePrice * 0.85, open + change)
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5
-    const volume = basePrice * (0.1 + Math.random() * 0.4)
+    const high = Math.max(open, close) + Math.abs(Math.sin(i * 0.53)) * volatility * 0.4
+    const low = Math.min(open, close) - Math.abs(Math.cos(i * 0.71)) * volatility * 0.4
+    const volume = basePrice * (0.15 + Math.abs(Math.sin(i * 0.29)) * 0.35)
 
     candles.push({ time, open, high, low, close, volume })
     price = close
@@ -31,10 +39,10 @@ export function CandlestickChart({ market, candles: apiCandles }) {
   const seriesRef = useRef(null)
   const volumeSeriesRef = useRef(null)
 
-  // Convert API candles or generate seed candles
+  // Compute display candles — keyed on symbol so seed candles don't regenerate on every price tick
   const candleData = useMemo(() => {
     if (apiCandles && apiCandles.length > 0) {
-      return apiCandles.map((c) => ({
+      const mapped = apiCandles.map((c) => ({
         time: typeof c.time === 'number' ? c.time : Math.floor(new Date(c.open_time || c.time).getTime() / 1000),
         open: Number(c.open),
         high: Number(c.high),
@@ -42,22 +50,38 @@ export function CandlestickChart({ market, candles: apiCandles }) {
         close: Number(c.close),
         volume: Number(c.volume || 0),
       })).sort((a, b) => a.time - b.time)
-    }
-    return generateSeedCandles(market.price)
-  }, [apiCandles, market.price])
 
-  // Initialize chart
+      // Deduplicate timestamps (API sometimes returns duplicates)
+      const seen = new Set()
+      return mapped.filter((c) => {
+        if (seen.has(c.time)) return false
+        seen.add(c.time)
+        return true
+      })
+    }
+    // Fall back to deterministic seed candles (stable per symbol)
+    return generateSeedCandles(getSeedPrice(market.symbol))
+  }, [apiCandles, market.symbol]) // NOTE: intentionally NOT depending on market.price to avoid re-render on every live tick
+
+  // Initialize chart — re-runs only when the trading pair changes
   useEffect(() => {
     if (!containerRef.current) return
-    let chart
+
+    let active = true
+    const roRef = { current: null }
 
     async function init() {
       const { createChart, ColorType, CrosshairMode } = await import('lightweight-charts')
 
-      chart = createChart(containerRef.current, {
+      // Bail if the effect was cleaned up while the import was loading
+      if (!active || !containerRef.current) return
+
+      const chart = createChart(containerRef.current, {
+        autoSize: true,
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
           textColor: '#64748b',
+          fontSize: 11,
         },
         grid: {
           vertLines: { color: 'rgba(255,255,255,0.03)' },
@@ -80,9 +104,13 @@ export function CandlestickChart({ market, candles: apiCandles }) {
         },
         handleScroll: { mouseWheel: true, pressedMouseMove: true },
         handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
-        width: containerRef.current.clientWidth || 600,
-        height: containerRef.current.clientHeight || 360,
       })
+
+      // Bail if cleaned up between the await and now — remove the partially-created chart
+      if (!active) {
+        chart.remove()
+        return
+      }
 
       const candleSeries = chart.addCandlestickSeries({
         upColor: '#10b981',
@@ -100,66 +128,83 @@ export function CandlestickChart({ market, candles: apiCandles }) {
       })
 
       chart.priceScale('volume').applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
+        scaleMargins: { top: 0.85, bottom: 0 },
       })
 
+      // Store refs only after successful creation
+      chartRef.current = chart
       seriesRef.current = candleSeries
       volumeSeriesRef.current = volumeSeries
-      chartRef.current = chart
 
-      // Set data
+      // Set initial data
       const ohlcData = candleData.map(({ time, open, high, low, close }) => ({ time, open, high, low, close }))
       const volData = candleData.map(({ time, volume, open, close }) => ({
         time,
         value: volume,
-        color: close >= open ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
+        color: close >= open ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)',
       }))
 
-      candleSeries.setData(ohlcData)
-      volumeSeries.setData(volData)
-      chart.timeScale().fitContent()
+      try {
+        candleSeries.setData(ohlcData)
+        volumeSeries.setData(volData)
+        chart.timeScale().fitContent()
+      } catch {
+        // Data may be empty or malformed — chart still renders, just without data
+      }
 
-      // Resize observer
-      const ro = new ResizeObserver(() => {
+      // ResizeObserver as a fallback for containers that don't trigger autoSize
+      if (!containerRef.current) return
+      roRef.current = new ResizeObserver(() => {
         if (containerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({
-            width: containerRef.current.clientWidth,
-            height: containerRef.current.clientHeight,
-          })
+          try {
+            chartRef.current.applyOptions({
+              width: containerRef.current.clientWidth,
+              height: containerRef.current.clientHeight,
+            })
+          } catch {}
         }
       })
-      ro.observe(containerRef.current)
-
-      return () => ro.disconnect()
+      roRef.current.observe(containerRef.current)
     }
 
-    const cleanup = init()
+    init()
+
     return () => {
-      cleanup.then((fn) => fn?.())
-      chart?.remove()
-      chartRef.current = null
+      active = false
+      roRef.current?.disconnect()
+      if (chartRef.current) {
+        try { chartRef.current.remove() } catch {}
+        chartRef.current = null
+      }
       seriesRef.current = null
       volumeSeriesRef.current = null
     }
-  }, [market.symbol]) // Re-init when pair changes
+  }, [market.symbol]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update data when candles change (without full reinit)
+  // Update candle data without reinitializing the chart (triggered by API/WS updates)
   useEffect(() => {
-    if (!seriesRef.current || !volumeSeriesRef.current) return
+    if (!seriesRef.current || !volumeSeriesRef.current || !chartRef.current) return
+
     const ohlcData = candleData.map(({ time, open, high, low, close }) => ({ time, open, high, low, close }))
     const volData = candleData.map(({ time, volume, open, close }) => ({
       time,
       value: volume,
-      color: close >= open ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
+      color: close >= open ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)',
     }))
+
     try {
       seriesRef.current.setData(ohlcData)
       volumeSeriesRef.current.setData(volData)
-      chartRef.current?.timeScale().fitContent()
+      chartRef.current.timeScale().fitContent()
     } catch {
-      // Chart may not be ready yet
+      // Chart may be in the middle of reinitializing
     }
   }, [candleData])
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+  return (
+    <div
+      ref={containerRef}
+      style={{ width: '100%', height: '100%' }}
+    />
+  )
 }

@@ -119,3 +119,47 @@ async def admin_update_kyc(
         raise HTTPException(status_code=404, detail="User not found")
     user.kyc_level = req.kyc_level
     return {"id": str(user.id), "kyc_level": user.kyc_level}
+
+
+@router.get("/trades")
+async def admin_get_trades(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all executed trades in the exchange (admin only)."""
+    from app.models.trade import Trade
+    from app.models.asset import TradingPair
+
+    offset = (page - 1) * limit
+    query = (
+        select(Trade, TradingPair)
+        .join(TradingPair, Trade.trading_pair_id == TradingPair.id)
+        .order_by(Trade.trade_timestamp.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    rows = result.all()
+
+    count_query = select(func.count()).select_from(Trade)
+    total = (await db.execute(count_query)).scalar()
+
+    return {
+        "trades": [
+            {
+                "id": str(t.id),
+                "pair": tp.symbol,
+                "price": str(t.price),
+                "quantity": str(t.quantity),
+                "quote_quantity": str(t.quote_quantity),
+                "role": "taker",
+                "timestamp": int(t.trade_timestamp.timestamp() * 1000),
+            }
+            for t, tp in rows
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+

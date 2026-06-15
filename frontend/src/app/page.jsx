@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Activity, ArrowDown, ArrowUp, BarChart3, Bell, BookOpen, ChevronDown,
   CircleDollarSign, LayoutDashboard, LogOut, Menu, Moon, Search, Settings,
-  ShieldCheck, Star, Sun, Wallet, X, TrendingUp, TrendingDown,
+  ShieldCheck, Star, Sun, Wallet, X,
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { tradingService } from '@/services/tradingService'
@@ -15,62 +15,35 @@ import { useAuth } from '@/providers/AuthProvider'
 import { useTheme } from '@/providers/ThemeProvider'
 import { useWebSocket } from '@/providers/WebSocketProvider'
 import { CandlestickChart } from '@/components/trading/CandlestickChart'
-
-// ─── Seed Market Data ──────────────────────────────────────────────────────────
-const MARKET_SEED = [
-  { symbol: 'BTCUSDT', base: 'BTC', price: 68429.12, change: 2.84, volume: '1.42B' },
-  { symbol: 'ETHUSDT', base: 'ETH', price: 3641.87, change: 1.92, volume: '824.6M' },
-  { symbol: 'BNBUSDT', base: 'BNB', price: 612.40, change: 0.84, volume: '412.1M' },
-  { symbol: 'SOLUSDT', base: 'SOL', price: 172.46, change: -0.74, volume: '318.2M' },
-  { symbol: 'XRPUSDT', base: 'XRP', price: 0.6245, change: 1.18, volume: '689.4M' },
-  { symbol: 'ADAUSDT', base: 'ADA', price: 0.4518, change: 4.11, volume: '91.8M' },
-  { symbol: 'DOGEUSDT', base: 'DOGE', price: 0.1682, change: -1.03, volume: '211.5M' },
-  { symbol: 'AVAXUSDT', base: 'AVAX', price: 41.28, change: 2.06, volume: '122.7M' },
-  { symbol: 'LINKUSDT', base: 'LINK', price: 18.74, change: 0.58, volume: '98.4M' },
-  { symbol: 'DOTUSDT', base: 'DOT', price: 7.35, change: -0.22, volume: '76.2M' },
-  { symbol: 'MATICUSDT', base: 'MATIC', price: 0.7124, change: 1.47, volume: '64.9M' },
-  { symbol: 'LTCUSDT', base: 'LTC', price: 84.50, change: 0.31, volume: '54.1M' },
-]
-
-// Default virtual balances for demo trading
-const DEMO_BALANCES = {
-  USDT: 10000,
-  BTC: 0.15,
-  ETH: 2.0,
-  BNB: 5.0,
-  SOL: 25.0,
-  XRP: 500,
-  ADA: 1000,
-  DOGE: 2000,
-  AVAX: 30,
-  LINK: 40,
-  DOT: 80,
-  MATIC: 500,
-  LTC: 2,
-}
+import { MARKET_SEED, DEMO_BALANCES } from '@/lib/marketData'
 
 // ─── Order book seed helpers ───────────────────────────────────────────────────
-const seedBook = (mid, side) => Array.from({ length: 12 }, (_, i) => {
-  const offset = (i + 1) * (mid > 1000 ? 5.73 : mid > 10 ? 0.09 : 0.0004)
-  const price = side === 'ask' ? mid + offset : mid - offset
-  const amount = ((i * 7 + 3) % 19 + 0.14) / (mid > 1000 ? 10 : 1)
-  return { price, amount, total: amount * price, depth: 22 + ((i * 17) % 72) }
-})
+function seedBook(mid, side) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const offset = (i + 1) * (mid > 1000 ? mid * 0.00008 : mid > 10 ? mid * 0.0003 : mid * 0.001)
+    const price = side === 'ask' ? mid + offset : mid - offset
+    const amount = ((i * 7 + 3) % 19 + 0.14) / (mid > 1000 ? 10 : mid > 10 ? 1 : 100)
+    return { price, amount, total: amount * price, depth: 22 + ((i * 17) % 72) }
+  })
+}
 
-const seedTrades = (mid) => Array.from({ length: 20 }, (_, i) => ({
-  id: i,
-  price: mid + ((i % 5) - 2) * 3.17,
-  amount: ((i * 13) % 47 + 2) / 1000,
-  side: i % 3 === 0 ? 'sell' : 'buy',
-  time: `${String(11).padStart(2, '0')}:${String(30 + Math.floor(i / 2)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}`,
-}))
+function seedTrades(mid, symbol) {
+  return Array.from({ length: 20 }, (_, i) => ({
+    id: `${symbol}-${i}`,
+    price: mid + ((i % 5) - 2) * mid * 0.0002,
+    amount: ((i * 13) % 47 + 2) / (mid > 1000 ? 1000 : mid > 10 ? 10 : 1),
+    side: i % 3 === 0 ? 'sell' : 'buy',
+    time: `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes() - Math.floor(i / 2)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}`,
+  }))
+}
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 function formatPrice(value) {
   const n = Number(value || 0)
+  if (!Number.isFinite(n)) return '0.00'
   return n >= 100
     ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : n.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+    : n.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 })
 }
 
 function stepDecimals(stepSize) {
@@ -86,24 +59,25 @@ function floorToStep(value, stepSize = '0.000001') {
 }
 
 // ─── Simulate live price ticks ─────────────────────────────────────────────────
-function useLivePriceTick(basePrice, interval = 2500) {
+function useLivePriceTick(basePrice, symbol, interval = 2500) {
   const [price, setPrice] = useState(basePrice)
-  const priceRef = useRef(basePrice)
+  const stateRef = useRef({ price: basePrice, symbol })
 
+  // Reset immediately when pair changes
   useEffect(() => {
-    priceRef.current = basePrice
+    stateRef.current = { price: basePrice, symbol }
     setPrice(basePrice)
-  }, [basePrice])
+  }, [basePrice, symbol])
 
   useEffect(() => {
     const id = setInterval(() => {
-      const volatility = priceRef.current * 0.0008
+      const volatility = stateRef.current.price * 0.0006
       const change = (Math.random() - 0.5) * volatility
-      priceRef.current = Math.max(priceRef.current * 0.9, priceRef.current + change)
-      setPrice(priceRef.current)
+      stateRef.current.price = Math.max(stateRef.current.price * 0.95, stateRef.current.price + change)
+      setPrice(stateRef.current.price)
     }, interval)
     return () => clearInterval(id)
-  }, [interval])
+  }, [symbol, interval]) // restart tick simulation on coin switch
 
   return price
 }
@@ -127,35 +101,35 @@ function Header({ onAuthOpen }) {
 
   return (
     <header className="exchange-header sticky top-0 z-50 border-b border-white/5 bg-[#090c12]/95 backdrop-blur-xl">
-      <div className="flex h-16 items-center gap-6 px-4 lg:px-6">
+      <div className="flex h-14 items-center gap-6 px-4 lg:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 text-[#0b0e14] shadow-lg shadow-amber-500/20">
-            <BarChart3 size={20} strokeWidth={2.8} />
+          <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 text-[#0b0e14] shadow-lg shadow-amber-500/20">
+            <BarChart3 size={18} strokeWidth={2.8} />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">TradeOff</span>
+          <span className="text-lg font-bold tracking-tight text-white">TradeOff</span>
         </div>
 
-        <nav className="hidden items-center gap-1 text-sm text-slate-400 md:flex">
+        <nav className="hidden items-center gap-0.5 text-sm text-slate-400 md:flex">
           {navItems.map(([label, href], i) => (
             <Link
               href={href}
               key={label}
-              className={`rounded-lg px-3 py-2 transition hover:bg-white/5 hover:text-white ${i === 1 ? 'bg-white/5 text-white' : ''}`}
+              className={`rounded-lg px-3 py-1.5 transition hover:bg-white/5 hover:text-white ${i === 1 ? 'bg-white/5 text-white' : ''}`}
             >
               {label}
             </Link>
           ))}
         </nav>
 
-        <div className="ml-auto hidden w-full max-w-sm items-center gap-2 rounded-xl border border-white/5 bg-white/[0.035] px-3 py-2 text-sm text-slate-500 lg:flex">
-          <Search size={16} />
-          <span>Search markets</span>
+        <div className="ml-auto hidden w-full max-w-[280px] items-center gap-2 rounded-xl border border-white/5 bg-white/[0.035] px-3 py-2 text-sm text-slate-500 lg:flex">
+          <Search size={15} />
+          <span className="text-xs">Search markets</span>
           <kbd className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[10px]">/</kbd>
         </div>
 
-        <div className="ml-auto flex items-center gap-2 lg:ml-0">
+        <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
           <span
-            className={`hidden rounded-full border px-2.5 py-1 text-[11px] sm:inline-flex ${
+            className={`hidden rounded-full border px-2 py-0.5 text-[10px] sm:inline-flex ${
               websocket?.connected
                 ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
                 : 'border-white/10 bg-white/[0.035] text-slate-500'
@@ -164,33 +138,33 @@ function Header({ onAuthOpen }) {
             {websocket?.connected ? '● Live' : '○ Offline'}
           </span>
           <button onClick={toggleTheme} className="icon-button" aria-label="Toggle theme">
-            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <Link href="/notifications" className="icon-button" aria-label="Notifications">
-            <Bell size={17} />
+            <Bell size={16} />
           </Link>
           {user ? (
             <button
               onClick={logout}
-              className="hidden items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 hover:text-white sm:flex"
+              className="hidden items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:text-white sm:flex"
             >
-              <LogOut size={15} /> Log out
+              <LogOut size={13} /> Log out
             </button>
           ) : (
             <>
-              <button onClick={onAuthOpen} className="hidden rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white sm:block">
+              <button onClick={onAuthOpen} className="hidden rounded-lg px-3 py-1.5 text-xs text-slate-300 hover:text-white sm:block">
                 Log in
               </button>
               <button
                 onClick={onAuthOpen}
-                className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-[#0b0e14] hover:bg-amber-300 transition"
+                className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-[#0b0e14] hover:bg-amber-300 transition"
               >
                 Get started
               </button>
             </>
           )}
           <button onClick={() => setMobileOpen(!mobileOpen)} className="icon-button md:hidden" aria-label="Menu">
-            <Menu size={18} />
+            <Menu size={17} />
           </button>
         </div>
       </div>
@@ -228,7 +202,7 @@ function SideRail() {
     [CircleDollarSign, '/copy-trading', 'Copy'],
   ]
   return (
-    <aside className="hidden w-14 shrink-0 flex-col items-center gap-3 border-r border-white/5 bg-[#090c12] py-4 lg:flex">
+    <aside className="hidden w-12 shrink-0 flex-col items-center gap-2 border-r border-white/5 bg-[#090c12] py-3 lg:flex">
       {items.map(([Icon, href, label], i) => (
         <Link
           href={href}
@@ -238,11 +212,11 @@ function SideRail() {
             i === 1 ? 'bg-amber-400/10 text-amber-400' : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
           }`}
         >
-          <Icon size={18} />
+          <Icon size={17} />
         </Link>
       ))}
       <Link href="/profile" title="Settings" className="mt-auto grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-white/5 hover:text-slate-200">
-        <Settings size={18} />
+        <Settings size={17} />
       </Link>
     </aside>
   )
@@ -254,21 +228,21 @@ function MarketSelector({ markets, selected, onSelect }) {
   const filtered = markets.filter((m) => m.symbol.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <section className="panel market-selector flex flex-col overflow-hidden" style={{ minHeight: 360 }}>
+    <section className="panel market-selector flex flex-col overflow-hidden h-full">
       <div className="panel-title">
         <span>Markets</span>
-        <Star size={15} className="text-slate-600" />
+        <Star size={13} className="text-slate-600" />
       </div>
-      <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg bg-white/[0.035] px-2.5 py-2 text-xs text-slate-500">
-        <Search size={14} />
+      <div className="mx-2 mb-1.5 flex items-center gap-2 rounded-lg bg-white/[0.035] px-2.5 py-1.5 text-xs text-slate-500">
+        <Search size={12} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full border-0 bg-transparent p-0 text-xs text-slate-200 placeholder:text-slate-600 focus:ring-0"
+          className="w-full border-0 bg-transparent p-0 text-[11px] text-slate-200 placeholder:text-slate-600 focus:ring-0"
           placeholder="Search pair"
         />
       </div>
-      <div className="grid grid-cols-[1fr_1fr_0.7fr] px-3 py-1 text-[10px] uppercase tracking-wider text-slate-600">
+      <div className="grid grid-cols-[1fr_1fr_0.7fr] px-2.5 py-1 text-[9px] uppercase tracking-wider text-slate-600">
         <span>Pair</span><span className="text-right">Price</span><span className="text-right">24h</span>
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -276,19 +250,19 @@ function MarketSelector({ markets, selected, onSelect }) {
           <button
             key={m.symbol}
             onClick={() => onSelect(m)}
-            className={`grid w-full grid-cols-[1fr_1fr_0.7fr] items-center px-3 py-2 text-xs transition hover:bg-white/[0.035] ${
+            className={`grid w-full grid-cols-[1fr_1fr_0.7fr] items-center px-2.5 py-1.5 text-[11px] transition hover:bg-white/[0.035] ${
               selected.symbol === m.symbol ? 'bg-white/[0.06]' : ''
             }`}
           >
             <span className="flex items-center gap-1.5 text-left font-medium text-slate-200">
               <Star
-                size={11}
+                size={10}
                 className={selected.symbol === m.symbol ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}
               />
               {m.base}<span className="text-slate-600">/USDT</span>
             </span>
             <span className="text-right font-mono text-slate-300">{formatPrice(m.price)}</span>
-            <span className={`text-right font-mono ${m.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <span className={`text-right font-mono text-[10px] ${m.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {m.change >= 0 ? '+' : ''}{Number(m.change).toFixed(2)}%
             </span>
           </button>
@@ -302,32 +276,36 @@ function MarketSelector({ markets, selected, onSelect }) {
 function TickerStrip({ market, livePrice }) {
   const displayPrice = livePrice || market.price
   const isUp = market.change >= 0
+  // Derive 24h high/low from live price (more realistic)
+  const high24h = market.high || displayPrice * 1.032
+  const low24h = market.low || displayPrice * 0.958
+
   return (
-    <section className="panel ticker-strip flex min-h-[86px] items-center gap-6 overflow-x-auto px-5 py-3">
+    <section className="panel ticker-strip flex min-h-[76px] shrink-0 items-center gap-5 overflow-x-auto px-4 py-2.5">
       <div className="min-w-fit">
-        <div className="flex items-center gap-2 text-base font-semibold text-white">
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-amber-400/10 text-xs text-amber-400">
+        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-400/10 text-[10px] text-amber-400">
             {market.base?.[0]}
           </span>
-          {market.base}/USDT <ChevronDown size={15} className="text-slate-600" />
+          {market.base}/USDT <ChevronDown size={13} className="text-slate-600" />
         </div>
-        <div className="mt-1 text-[11px] text-slate-600">Spot market</div>
+        <div className="mt-0.5 text-[10px] text-slate-600">Spot market</div>
       </div>
       <div className="min-w-fit">
-        <div className={`font-mono text-xl font-bold transition-colors ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <div className={`font-mono text-lg font-bold tabular-nums transition-colors ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
           {formatPrice(displayPrice)}
         </div>
-        <div className="text-[11px] text-slate-600">${formatPrice(displayPrice)}</div>
+        <div className="text-[10px] text-slate-600">${formatPrice(displayPrice)}</div>
       </div>
       {[
         ['24h Change', `${market.change >= 0 ? '+' : ''}${Number(market.change).toFixed(2)}%`, isUp ? 'text-emerald-400' : 'text-rose-400'],
-        ['24h High', formatPrice(market.price * 1.032), 'text-slate-300'],
-        ['24h Low', formatPrice(market.price * 0.958), 'text-slate-300'],
+        ['24h High', formatPrice(high24h), 'text-slate-300'],
+        ['24h Low', formatPrice(low24h), 'text-slate-300'],
         [`24h Volume (${market.base})`, market.volume, 'text-slate-300'],
       ].map(([label, value, color]) => (
         <div key={label} className="min-w-fit">
-          <div className="text-[11px] text-slate-600">{label}</div>
-          <div className={`mt-1 font-mono text-xs ${color}`}>{value}</div>
+          <div className="text-[10px] text-slate-600">{label}</div>
+          <div className={`mt-0.5 font-mono text-[11px] ${color}`}>{value}</div>
         </div>
       ))}
     </section>
@@ -340,27 +318,28 @@ function PriceChart({ market, candles }) {
   const tabs = ['1m', '5m', '15m', '1H', '4H', '1D']
   return (
     <section className="panel price-chart flex flex-col overflow-hidden h-full">
-      <div className="panel-title">
+      <div className="panel-title shrink-0">
         <div className="flex items-center gap-3">
           <span>Chart</span>
           {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`text-[11px] transition ${
-                t === tab ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'
+              className={`text-[10px] transition ${
+                t === tab ? 'text-amber-400 font-semibold' : 'text-slate-600 hover:text-slate-400'
               } ${t !== '1m' ? 'cursor-not-allowed opacity-40' : ''}`}
+              disabled={t !== '1m'}
             >
               {t}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-600">
-          <BarChart3 size={14} />
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+          <BarChart3 size={13} />
           <span>Candles</span>
         </div>
       </div>
-      <div className="flex-1 px-2 pb-2 pt-0 min-h-0">
+      <div className="flex-1 min-h-0 px-1 pb-1">
         <CandlestickChart market={market} candles={candles} />
       </div>
     </section>
@@ -368,16 +347,18 @@ function PriceChart({ market, candles }) {
 }
 
 // ─── Order Book ───────────────────────────────────────────────────────────────
-function OrderBook({ market, depth }) {
+function OrderBook({ market, depth, livePrice }) {
+  const mid = livePrice || market.price
+
   const bids = useMemo(() => {
-    if (!depth?.bids?.length) return seedBook(market.price, 'bid')
+    if (!depth?.bids?.length) return seedBook(mid, 'bid')
     return depth.bids.slice(0, 12).map(([p, q]) => ({ price: +p, amount: +q, total: +p * +q }))
-  }, [depth, market.price])
+  }, [depth, mid])
 
   const asks = useMemo(() => {
-    if (!depth?.asks?.length) return seedBook(market.price, 'ask').reverse()
+    if (!depth?.asks?.length) return seedBook(mid, 'ask').reverse()
     return depth.asks.slice(0, 12).map(([p, q]) => ({ price: +p, amount: +q, total: +p * +q })).reverse()
-  }, [depth, market.price])
+  }, [depth, mid])
 
   const withDepth = (list) => {
     let cum = 0
@@ -390,12 +371,12 @@ function OrderBook({ market, depth }) {
   const bidsWithDepth = withDepth(bids)
 
   const row = (item, side, i) => (
-    <div key={`${side}-${i}`} className="relative grid grid-cols-3 px-3 py-[3.5px] font-mono text-[11px] hover:bg-white/[0.02]">
-      <span className={`relative z-10 ${side === 'ask' ? 'text-rose-400' : 'text-emerald-400'}`}>{formatPrice(item.price)}</span>
-      <span className="relative z-10 text-right text-slate-400">{item.amount.toFixed(5)}</span>
-      <span className="relative z-10 text-right text-slate-600">{item.total.toFixed(2)}</span>
+    <div key={`${side}-${i}`} className="relative grid grid-cols-3 px-3 py-[3px] font-mono text-[11px] hover:bg-white/[0.02]">
+      <span className={`relative z-10 tabular-nums ${side === 'ask' ? 'text-rose-400' : 'text-emerald-400'}`}>{formatPrice(item.price)}</span>
+      <span className="relative z-10 text-right text-slate-400 tabular-nums">{item.amount.toFixed(5)}</span>
+      <span className="relative z-10 text-right text-slate-600 tabular-nums">{item.total.toFixed(2)}</span>
       <span
-        className={`absolute inset-y-0 right-0 ${side === 'ask' ? 'bg-rose-500/[0.08]' : 'bg-emerald-500/[0.08]'}`}
+        className={`absolute inset-y-0 right-0 ${side === 'ask' ? 'bg-rose-500/[0.07]' : 'bg-emerald-500/[0.07]'}`}
         style={{ width: `${item.depth}%` }}
       />
     </div>
@@ -403,20 +384,22 @@ function OrderBook({ market, depth }) {
 
   return (
     <section className="panel order-book flex flex-col overflow-hidden h-full">
-      <div className="panel-title">
+      <div className="panel-title shrink-0">
         <span>Order Book</span>
-        <span className="text-[10px] text-slate-600">0.10 USDT</span>
+        <span className="text-[10px] text-slate-600">0.01 USDT</span>
       </div>
-      <div className="grid grid-cols-3 px-3 py-2 text-[10px] text-slate-600">
+      <div className="grid grid-cols-3 px-3 py-1.5 text-[9px] uppercase tracking-wider text-slate-600 shrink-0">
         <span>Price (USDT)</span>
         <span className="text-right">Amount ({market.base})</span>
         <span className="text-right">Total</span>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div>{asksWithDepth.map((x, i) => row(x, 'ask', i))}</div>
-        <div className="flex items-center gap-2 border-y border-white/5 px-3 py-2 font-mono text-sm font-bold">
-          {market.change >= 0 ? <ArrowUp size={14} className="text-emerald-400" /> : <ArrowDown size={14} className="text-rose-400" />}
-          <span className={market.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatPrice(market.price)}</span>
+        <div className="flex items-center gap-2 border-y border-white/5 px-3 py-1.5 font-mono text-xs font-bold shrink-0">
+          {market.change >= 0
+            ? <ArrowUp size={13} className="text-emerald-400" />
+            : <ArrowDown size={13} className="text-rose-400" />}
+          <span className={`tabular-nums ${market.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatPrice(mid)}</span>
           <span className="ml-auto text-[10px] font-normal text-slate-600">Spread 0.01%</span>
         </div>
         <div>{bidsWithDepth.map((x, i) => row(x, 'bid', i))}</div>
@@ -426,25 +409,29 @@ function OrderBook({ market, depth }) {
 }
 
 // ─── Recent Trades ────────────────────────────────────────────────────────────
-function RecentTrades({ market, tradesList }) {
-  const seeded = useMemo(() => seedTrades(market.price), [market.price])
+function RecentTrades({ market, tradesList, livePrice }) {
+  const mid = livePrice || market.price
+  // Only regenerate seeded trades on pair change (live price updates handled by tradesList)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const seeded = useMemo(() => seedTrades(market.price, market.symbol), [market.symbol])
   const trades = tradesList?.length ? tradesList : seeded
+
   return (
-    <section className="panel recent-trades flex flex-col overflow-hidden">
-      <div className="panel-title">
+    <section className="panel recent-trades flex flex-col overflow-hidden h-full">
+      <div className="panel-title shrink-0">
         <span>Market Trades</span>
-        <Activity size={14} className="text-slate-600" />
+        <Activity size={13} className="text-slate-600" />
       </div>
-      <div className="grid grid-cols-3 px-3 py-2 text-[10px] text-slate-600">
+      <div className="grid grid-cols-3 px-3 py-1.5 text-[9px] uppercase tracking-wider text-slate-600 shrink-0">
         <span>Price (USDT)</span>
         <span className="text-right">Amount</span>
         <span className="text-right">Time</span>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {trades.map((t, i) => (
-          <div key={t.id ?? i} className="grid grid-cols-3 px-3 py-[4px] font-mono text-[11px] hover:bg-white/[0.025]">
+          <div key={t.id ?? i} className="grid grid-cols-3 px-3 py-[3.5px] font-mono text-[11px] hover:bg-white/[0.025]">
             <span className={t.side === 'buy' ? 'text-emerald-400' : 'text-rose-400'}>{formatPrice(t.price)}</span>
-            <span className="text-right text-slate-400">{(isNaN(Number(t.amount)) ? 0 : Number(t.amount)).toFixed(5)}</span>
+            <span className="text-right text-slate-400 tabular-nums">{(isNaN(Number(t.amount)) ? 0 : Number(t.amount)).toFixed(5)}</span>
             <span className="text-right text-slate-600">{t.time ?? '—'}</span>
           </div>
         ))}
@@ -505,13 +492,11 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
     const a = Number(cleanAmt)
     const cost = side === 'BUY' ? a * p : a
 
-    // Check local balances
     if (side === 'BUY' && Number(balances.USDT || 0) < cost) return toast.error('Insufficient USDT balance')
     if (side === 'SELL' && Number(balances[market.base] || 0) < a) return toast.error(`Insufficient ${market.base} balance`)
 
     setBusy(true)
     try {
-      // Try backend first
       try {
         if (type === 'Market' && side === 'BUY') {
           await tradingService.placeMarketOrder(market.symbol, side, '0', String(cost))
@@ -525,7 +510,6 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
       } catch {
         // Backend unavailable — simulate locally
       }
-      // Always update local balances for demo feel
       onLocalTrade?.({ side, base: market.base, amount: a, price: p, cost })
       toast.success(`${side === 'BUY' ? '🟢 Buy' : '🔴 Sell'} order placed — ${cleanAmt} ${market.base} @ ${formatPrice(p)} USDT`)
       setAmount('')
@@ -543,7 +527,7 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
 
   return (
     <form onSubmit={submit} className="flex-1 px-4 py-3">
-      <div className="mb-4 flex gap-4 text-xs">
+      <div className="mb-3 flex gap-4 text-xs">
         {['Limit', 'Market', 'Stop'].map((t) => (
           <button type="button" key={t} onClick={() => setType(t)}
             className={type === t ? 'text-amber-400 font-semibold' : 'text-slate-600 hover:text-slate-300'}
@@ -563,7 +547,7 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
       {type === 'Stop' && <Field label="Stop" value={stopPrice} onChange={setStopPrice} suffix="USDT" />}
       {type !== 'Market' && <Field label="Price" value={price} onChange={setPrice} suffix="USDT" />}
       <Field label="Amount" value={amount} onChange={setAmount} suffix={market.base} />
-      <div className="my-3 flex items-center gap-1.5">
+      <div className="my-2.5 flex items-center gap-1">
         {[25, 50, 75, 100].map((pct) => (
           <button type="button" key={pct} onClick={() => applyPercent(pct)}
             className="flex-1 rounded bg-white/[0.04] py-1.5 text-[10px] text-slate-500 hover:bg-white/[0.09] hover:text-slate-200 transition"
@@ -572,13 +556,13 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
           </button>
         ))}
       </div>
-      <div className="mb-4 flex justify-between text-[11px] text-slate-600">
+      <div className="mb-3 flex justify-between text-[11px] text-slate-600">
         <span>Total</span>
-        <span className="font-mono text-slate-400">{total > 0 ? formatPrice(total) : '0.00'} USDT</span>
+        <span className="font-mono text-slate-400 tabular-nums">{total > 0 ? formatPrice(total) : '0.00'} USDT</span>
       </div>
       <button
         disabled={busy}
-        className={`w-full rounded-lg py-3 text-sm font-bold text-white transition disabled:opacity-60 ${
+        className={`w-full rounded-lg py-2.5 text-sm font-bold text-white transition disabled:opacity-60 ${
           side === 'BUY'
             ? 'bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'
             : 'bg-rose-500 hover:bg-rose-400 shadow-lg shadow-rose-500/20'
@@ -592,32 +576,17 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
 
 // ─── Trading Panel ────────────────────────────────────────────────────────────
 function TradingPanel({ market, onAuthOpen, balances, onOrderSubmitted, onLocalTrade }) {
-  const [activeSide, setActiveSide] = useState(null)
   return (
-    <section className="panel trading-panel overflow-hidden">
+    <section className="panel trading-panel overflow-hidden shrink-0">
       <div className="panel-title">
         <span>Spot Trading</span>
         <span className="flex items-center gap-1 text-[10px] text-emerald-400">
-          <ShieldCheck size={12} /> Protected execution
+          <ShieldCheck size={11} /> Protected
         </span>
       </div>
       <div className="flex divide-x divide-white/5">
-        <OrderForm
-          market={market}
-          side="BUY"
-          onAuthOpen={onAuthOpen}
-          balances={balances}
-          onOrderSubmitted={onOrderSubmitted}
-          onLocalTrade={onLocalTrade}
-        />
-        <OrderForm
-          market={market}
-          side="SELL"
-          onAuthOpen={onAuthOpen}
-          balances={balances}
-          onOrderSubmitted={onOrderSubmitted}
-          onLocalTrade={onLocalTrade}
-        />
+        <OrderForm market={market} side="BUY" onAuthOpen={onAuthOpen} balances={balances} onOrderSubmitted={onOrderSubmitted} onLocalTrade={onLocalTrade} />
+        <OrderForm market={market} side="SELL" onAuthOpen={onAuthOpen} balances={balances} onOrderSubmitted={onOrderSubmitted} onLocalTrade={onLocalTrade} />
       </div>
     </section>
   )
@@ -627,41 +596,41 @@ function TradingPanel({ market, onAuthOpen, balances, onOrderSubmitted, onLocalT
 function OpenOrders({ orders = [], onCancel, localOrders = [] }) {
   const all = [...localOrders, ...orders]
   return (
-    <section className="panel open-orders overflow-hidden" style={{ minHeight: 180 }}>
-      <div className="panel-title justify-start gap-6">
-        <button className="text-slate-200">
-          Open Orders{' '}
-          <span className="ml-1 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-600">{all.length}</span>
+    <section className="panel open-orders overflow-hidden shrink-0">
+      <div className="panel-title justify-start gap-5">
+        <button className="text-slate-200 text-xs">
+          Open Orders
+          <span className="ml-1.5 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-600">{all.length}</span>
         </button>
-        <button className="text-slate-600 hover:text-slate-300">Order History</button>
-        <button className="text-slate-600 hover:text-slate-300">Trade History</button>
+        <button className="text-slate-600 hover:text-slate-300 text-xs">Order History</button>
+        <button className="text-slate-600 hover:text-slate-300 text-xs">Trade History</button>
       </div>
       {all.length ? (
         <div>
-          <div className="grid grid-cols-6 border-b border-white/5 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-600">
-            <span>Pair</span><span>Side</span><span>Price</span><span>Quantity</span><span>Status</span><span />
+          <div className="grid grid-cols-6 border-b border-white/5 px-3 py-1.5 text-[9px] uppercase tracking-wider text-slate-600">
+            <span>Pair</span><span>Side</span><span>Price</span><span>Qty</span><span>Status</span><span />
           </div>
           {all.map((o, i) => (
             <div key={o.id ?? i} className="grid grid-cols-6 items-center border-b border-white/5 px-3 py-2 text-xs">
               <span className="text-slate-300">{o.pair || `${o.base}/USDT`}</span>
               <span className={o.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}>{o.side}</span>
-              <span className="font-mono">{o.price ? formatPrice(o.price) : 'Market'}</span>
-              <span className="font-mono">{o.quantity || o.amount}</span>
+              <span className="font-mono tabular-nums">{o.price ? formatPrice(o.price) : 'Market'}</span>
+              <span className="font-mono tabular-nums">{o.quantity || o.amount}</span>
               <span className="text-amber-400">{o.status || 'OPEN'}</span>
-              {o.id && (
+              {o.id ? (
                 <button onClick={() => onCancel(o.id)} className="text-right text-xs text-rose-400 hover:text-rose-300">
                   Cancel
                 </button>
-              )}
+              ) : <span />}
             </div>
           ))}
         </div>
       ) : (
-        <div className="grid h-32 place-items-center text-center">
+        <div className="grid h-24 place-items-center text-center">
           <div>
-            <BookOpen className="mx-auto mb-2 text-slate-700" size={22} />
+            <BookOpen className="mx-auto mb-1.5 text-slate-700" size={20} />
             <div className="text-xs text-slate-500">No open orders</div>
-            <div className="mt-1 text-[11px] text-slate-700">Your active orders will appear here</div>
+            <div className="mt-0.5 text-[11px] text-slate-700">Your active orders will appear here</div>
           </div>
         </div>
       )}
@@ -690,7 +659,7 @@ function AuthModal({ open, onClose }) {
         toast.success('Welcome back!')
         onClose()
       } else {
-        toast.loading('Creating your TradeOff account…', { id: 'auth' })
+        toast.loading('Creating your account…', { id: 'auth' })
         await register(email, password, referralCode)
         toast.dismiss('auth')
         toast.success('Account created. Welcome to TradeOff!')
@@ -717,7 +686,7 @@ function AuthModal({ open, onClose }) {
             </h2>
             <p className="mt-1 text-xs text-slate-500">TradeOff exchange simulator</p>
           </div>
-          <button onClick={onClose} className="icon-button"><X size={17} /></button>
+          <button onClick={onClose} className="icon-button"><X size={16} /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <label className="auth-label">
@@ -761,7 +730,7 @@ export default function Home() {
   const [tradesList, setTradesList] = useState([])
   const [localOrders, setLocalOrders] = useState([])
 
-  // Local virtual balances (used as fallback when backend is offline)
+  // Virtual balances persisted to localStorage
   const [virtualBalances, setVirtualBalances] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -772,7 +741,6 @@ export default function Home() {
     return { ...DEMO_BALANCES }
   })
 
-  // Save virtual balances to localStorage whenever they change
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('tradeoff_virtual_balances', JSON.stringify(virtualBalances))
@@ -790,32 +758,45 @@ export default function Home() {
   const { refetch: refetchBalances } = balancesQuery
   const { refetch: refetchOrders } = ordersQuery
 
-  // Markets list
+  // Merged markets list (backend pairs + live tickers + seed fallback)
   const markets = useMemo(() => {
     const source = pairsQuery.data?.length
-      ? pairsQuery.data.map((pair) => ({
-          ...(MARKET_SEED.find((s) => s.symbol === pair.symbol) || { symbol: pair.symbol, base: pair.base_asset, price: 0, change: 0, volume: '0' }),
-          base: pair.base_asset,
-          stepSize: pair.step_size,
-        }))
+      ? pairsQuery.data.map((pair) => {
+          const seed = MARKET_SEED.find((s) => s.symbol === pair.symbol) || { symbol: pair.symbol, base: pair.base_asset, price: 0, change: 0, volume: '0' }
+          return { ...seed, base: pair.base_asset, stepSize: pair.step_size }
+        })
       : MARKET_SEED
     return source.map((m) => {
       const live = liveTickers[m.symbol]
-      return live ? { ...m, price: Number(live.price || m.price), change: Number(live.change_pct_24h ?? m.change ?? 0), volume: live.volume_24h && +live.volume_24h > 0 ? Number(live.volume_24h).toLocaleString() : m.volume } : m
+      if (!live) return m
+      return {
+        ...m,
+        price: Number(live.price || m.price),
+        change: Number(live.change_pct_24h ?? m.change ?? 0),
+        volume: live.volume_24h && +live.volume_24h > 0 ? Number(live.volume_24h).toLocaleString() : m.volume,
+        high: live.high_24h ? Number(live.high_24h) : m.high,
+        low: live.low_24h ? Number(live.low_24h) : m.low,
+      }
     })
   }, [pairsQuery.data, liveTickers])
 
-  // Selected market merged with live data
+  // Active market (selected + live data)
   const market = useMemo(() => {
     const sel = markets.find((m) => m.symbol === selected.symbol) || selected
     const live = liveTickers[sel.symbol]
-    if (live) return { ...sel, price: Number(live.price), change: Number(live.change_pct_24h ?? sel.change ?? 0) }
+    if (live) return {
+      ...sel,
+      price: Number(live.price),
+      change: Number(live.change_pct_24h ?? sel.change ?? 0),
+      high: live.high_24h ? Number(live.high_24h) : sel.high,
+      low: live.low_24h ? Number(live.low_24h) : sel.low,
+    }
     if (tickerQuery.data?.price && +tickerQuery.data.price > 0)
-      return { ...sel, price: +tickerQuery.data.price, change: +tickerQuery.data.change_pct_24h ?? sel.change }
+      return { ...sel, price: +tickerQuery.data.price, change: +(tickerQuery.data.change_pct_24h ?? sel.change) }
     return sel
   }, [selected, markets, tickerQuery.data, liveTickers])
 
-  // Compute balances — use backend if available, otherwise local virtual
+  // Balances (backend when logged in, otherwise virtual demo)
   const balances = useMemo(() => {
     if (balancesQuery.data?.balances?.length) {
       return Object.fromEntries(balancesQuery.data.balances.map((b) => [b.asset, b.available]))
@@ -823,7 +804,7 @@ export default function Home() {
     return virtualBalances
   }, [balancesQuery.data, virtualBalances])
 
-  // Apply a local trade (deduct/add from virtual balances)
+  // Apply a demo trade locally
   function applyLocalTrade({ side, base, amount, price, cost }) {
     setVirtualBalances((prev) => {
       const next = { ...prev }
@@ -836,8 +817,7 @@ export default function Home() {
       }
       return next
     })
-    // Add to local orders
-    const order = {
+    setLocalOrders((prev) => [{
       id: null,
       pair: `${base}/USDT`,
       base,
@@ -846,20 +826,24 @@ export default function Home() {
       amount: amount.toFixed(6),
       quantity: amount.toFixed(6),
       status: 'FILLED',
-    }
-    setLocalOrders((prev) => [order, ...prev].slice(0, 20))
+    }, ...prev].slice(0, 20))
   }
 
-  // Reset virtual balances to demo defaults
   function resetVirtualBalances() {
     setVirtualBalances({ ...DEMO_BALANCES })
     setLocalOrders([])
     toast.success('Virtual balances reset to demo defaults')
   }
 
-  // Load candles, depth, and trades on pair change
+  // Load candles, depth, trades on pair change — clears stale data first
   useEffect(() => {
     let active = true
+
+    // Immediately clear stale data so the chart shows fresh seed candles for the new pair
+    setCandles([])
+    setDepth({ bids: [], asks: [] })
+    setTradesList([])
+
     async function loadData() {
       try {
         const sym = selected.symbol
@@ -870,24 +854,25 @@ export default function Home() {
         ])
         if (!active) return
         if (c?.length) setCandles(c)
-        if (d) setDepth(d)
+        if (d?.bids?.length || d?.asks?.length) setDepth(d)
         if (t?.length) {
           setTradesList(t.map((x) => ({
             id: x.id,
             price: Number(x.price),
-            amount: Number(x.qty),
+            amount: Number(x.qty || x.quantity || 0),
             side: x.is_buyer_maker ? 'sell' : 'buy',
             time: new Date(x.time).toLocaleTimeString([], { hour12: false }),
           })))
         }
       } catch {}
     }
+
     loadData()
     const iv = setInterval(() => { if (active) loadData() }, 20000)
     return () => { active = false; clearInterval(iv) }
   }, [selected.symbol])
 
-  // WebSocket: tickers
+  // WebSocket: live tickers
   useEffect(() => {
     if (!websocket) return
     return websocket.subscribe('market.tickers', (event) => {
@@ -897,6 +882,7 @@ export default function Home() {
         updates.forEach((t) => { next[t.symbol] = t })
         return next
       })
+      // Update last candle's close from ticker
       const match = updates.find((t) => t.symbol === selected.symbol)
       if (match) {
         const newPrice = Number(match.price)
@@ -914,14 +900,15 @@ export default function Home() {
     })
   }, [websocket, selected.symbol])
 
-  // WebSocket: trades + orderbook
+  // WebSocket: live trades + order book for current pair
   useEffect(() => {
     if (!websocket) return
+
     const unsubTrades = websocket.subscribe(`trades.${selected.symbol}`, (event) => {
       const trade = {
         id: event.trade_id || Math.random().toString(),
         price: Number(event.price),
-        amount: Number(event.quantity || event.qty),
+        amount: Number(event.quantity || event.qty || 0),
         side: event.side?.toLowerCase() || 'buy',
         time: event.timestamp
           ? new Date(event.timestamp).toLocaleTimeString([], { hour12: false })
@@ -943,13 +930,12 @@ export default function Home() {
 
     const unsubDepth = websocket.subscribe(`orderbook.${selected.symbol}`, (event) => {
       if (event?.bids || event?.asks) setDepth(event)
-      refetchTicker()
     })
 
     return () => { unsubTrades(); unsubDepth() }
   }, [selected.symbol, websocket, refetchTicker])
 
-  // WebSocket: private events
+  // WebSocket: private events (orders + wallet)
   useEffect(() => {
     if (!websocket || !user) return
     const refresh = () => { refetchOrders(); refetchBalances() }
@@ -975,9 +961,10 @@ export default function Home() {
 
   function onOrderSubmitted() { refetchOrders(); refetchBalances() }
 
-  // Live simulated price
-  const livePrice = useLivePriceTick(market.price)
+  // Live simulated price tick (resets on coin change)
+  const livePrice = useLivePriceTick(market.price, market.symbol)
 
+  const HEADER_H = 56  // matches h-14
   return (
     <div className="min-h-screen bg-[#070a0f] text-slate-300">
       <Toaster
@@ -986,42 +973,41 @@ export default function Home() {
       />
       <Header onAuthOpen={() => setAuthOpen(true)} />
 
-      <div className="flex" style={{ height: 'calc(100vh - 64px)' }}>
+      <div className="flex overflow-hidden" style={{ height: `calc(100vh - ${HEADER_H}px)` }}>
         <SideRail />
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden p-2 lg:p-3 gap-2">
-          {/* Top grid */}
-          <div className="grid min-h-0 flex-1 gap-2 xl:grid-cols-[240px_minmax(0,1fr)_280px]">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden p-1.5 gap-1.5">
+          {/* Top row: Market Selector | Ticker+Chart | Order Book */}
+          <div className="grid min-h-0 flex-1 gap-1.5 xl:grid-cols-[220px_minmax(0,1fr)_260px]">
+
             {/* Left: Market Selector */}
             <div className="hidden xl:flex xl:flex-col min-h-0">
               <MarketSelector markets={markets} selected={market} onSelect={setSelected} />
             </div>
 
-            {/* Center: Ticker + Chart */}
-            <div className="flex min-w-0 flex-col gap-2 min-h-0">
+            {/* Center: Ticker strip + Chart */}
+            <div className="flex min-w-0 flex-col gap-1.5 min-h-0">
               <TickerStrip market={market} livePrice={livePrice} />
-              <div style={{ height: 'calc(100vh - 450px)', minHeight: 240 }}>
+              <div className="flex-1 min-h-0">
                 <PriceChart market={market} candles={candles} />
               </div>
             </div>
 
             {/* Right: Order Book */}
-            <div className="flex flex-col min-h-0">
-              <OrderBook market={market} depth={depth} />
+            <div className="hidden xl:flex xl:flex-col min-h-0">
+              <OrderBook market={market} depth={depth} livePrice={livePrice} />
             </div>
           </div>
 
-          {/* Bottom grid */}
-          <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_280px]" style={{ minHeight: 260 }}>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between text-[11px] text-slate-600 px-1">
-                {!user && (
-                  <span>
-                    Demo mode — virtual balance available.{' '}
-                    <button onClick={resetVirtualBalances} className="text-amber-400 hover:underline">Reset</button>
-                  </span>
-                )}
-              </div>
+          {/* Bottom row: Trading Panel + Open Orders | Recent Trades */}
+          <div className="grid gap-1.5 xl:grid-cols-[minmax(0,1fr)_260px]" style={{ minHeight: 280 }}>
+            <div className="flex flex-col gap-1.5 min-h-0">
+              {!user && (
+                <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-1.5 text-[11px] text-slate-600">
+                  <span>Demo mode — virtual balance active.</span>
+                  <button onClick={resetVirtualBalances} className="text-amber-400 hover:underline">Reset</button>
+                </div>
+              )}
               <TradingPanel
                 market={market}
                 balances={balances}
@@ -1035,8 +1021,8 @@ export default function Home() {
                 localOrders={user ? [] : localOrders}
               />
             </div>
-            <div className="flex flex-col min-h-0" style={{ minHeight: 260 }}>
-              <RecentTrades market={market} tradesList={tradesList} />
+            <div className="hidden xl:flex xl:flex-col min-h-0">
+              <RecentTrades market={market} tradesList={tradesList} livePrice={livePrice} />
             </div>
           </div>
         </main>

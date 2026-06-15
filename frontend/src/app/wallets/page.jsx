@@ -121,7 +121,10 @@ function HistoryPanel({ title, rows, actionLabel, onAction }) {
   return <div className="panel overflow-hidden">
     <div className="panel-title">{title}</div>
     {rows.length ? rows.map((row) => <div key={row.id} className="grid grid-cols-[1fr_0.7fr_0.8fr_auto] items-center gap-2 border-b border-white/5 px-4 py-3 text-xs">
-      <span className="truncate text-slate-300">{row.tx_hash || row.address || row.id}</span>
+      <span className="truncate text-slate-300">
+        {row.asset && <span className="mr-1.5 font-bold text-amber-400">{row.asset}</span>}
+        {row.tx_hash || row.address || row.id}
+      </span>
       <span className="font-mono">{row.amount}</span>
       <StatusPill tone={row.status === 'COMPLETED' ? 'success' : row.status === 'FAILED' || row.status === 'CANCELLED' ? 'danger' : 'warning'}>{row.status}</StatusPill>
       {actionLabel && row.status !== 'COMPLETED' ? <button onClick={() => onAction(row.id)} className="rounded bg-white/5 px-2 py-1 text-amber-400">{actionLabel}</button> : <span />}

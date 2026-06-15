@@ -1,29 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownToLine, ArrowUpRight, PieChart, RefreshCw } from 'lucide-react'
 import { ProductShell, StatCard, EmptyState, StatusPill } from '@/components/ProductShell'
 import { walletService } from '@/services/walletService'
 import { useWebSocket } from '@/providers/WebSocketProvider'
-
-// Market seed prices for local portfolio valuation
-const SEED_PRICES = {
-  USDT: 1,
-  BTC: 68429,
-  ETH: 3641,
-  BNB: 612,
-  SOL: 172,
-  XRP: 0.6245,
-  ADA: 0.4518,
-  DOGE: 0.1682,
-  AVAX: 41.28,
-  LINK: 18.74,
-  DOT: 7.35,
-  MATIC: 0.7124,
-  LTC: 84.50,
-}
+import { SEED_PRICES } from '@/lib/marketData'
 
 const ASSET_COLORS = [
   'from-amber-400 to-orange-500',
@@ -34,7 +18,7 @@ const ASSET_COLORS = [
   'from-cyan-400 to-sky-500',
 ]
 
-function getVirtualHoldings() {
+function getVirtualHoldings(overridePrices = {}) {
   if (typeof window === 'undefined') return []
   try {
     const stored = localStorage.getItem('tradeoff_virtual_balances')
@@ -43,7 +27,7 @@ function getVirtualHoldings() {
     return Object.entries(balances)
       .filter(([, v]) => Number(v) > 0)
       .map(([asset, available]) => {
-        const price = SEED_PRICES[asset] || 0
+        const price = overridePrices[asset] ?? SEED_PRICES[asset] ?? 0
         const total = Number(available)
         const usd = total * price
         return {
@@ -64,35 +48,67 @@ function getVirtualHoldings() {
 export default function PortfolioPage() {
   const websocket = useWebSocket()
   const [virtualHoldings, setVirtualHoldings] = useState([])
+  const [livePrices, setLivePrices] = useState({})
 
   const { data, refetch: refetchPortfolio } = useQuery({
     queryKey: ['portfolio'],
     queryFn: () => walletService.getPortfolioSummary(),
     retry: 1,
-    refetchInterval: 5000,
+    refetchInterval: 10000,
   })
 
   const allocationQuery = useQuery({
     queryKey: ['allocation'],
     queryFn: () => walletService.getAllocation(),
     retry: 1,
-    refetchInterval: 5000,
+    refetchInterval: 10000,
   })
   const { refetch: refetchAllocation } = allocationQuery
 
-  // Load virtual holdings from localStorage on mount
+  // Load virtual holdings whenever live prices update
+  const refreshVirtual = () => setVirtualHoldings(getVirtualHoldings(livePrices))
+
   useEffect(() => {
-    setVirtualHoldings(getVirtualHoldings())
+    setVirtualHoldings(getVirtualHoldings({}))
   }, [])
 
-  // Merge backend data with virtual balances
+  useEffect(() => {
+    if (Object.keys(livePrices).length > 0) {
+      setVirtualHoldings(getVirtualHoldings(livePrices))
+    }
+  }, [livePrices])
+
+  // Subscribe to live ticker updates
+  useEffect(() => {
+    if (!websocket) return
+    return websocket.subscribe('market.tickers', (event) => {
+      const updates = event.tickers || []
+      if (updates.length) {
+        setLivePrices((prev) => {
+          const next = { ...prev }
+          updates.forEach((t) => {
+            const base = t.symbol.replace('USDT', '')
+            if (base) next[base] = Number(t.price)
+          })
+          return next
+        })
+      }
+      refetchPortfolio()
+      refetchAllocation()
+    })
+  }, [websocket, refetchPortfolio, refetchAllocation])
+
+  // Prefer backend holdings; fall back to virtual
   const backendHoldings = data?.holdings || []
   const holdings = backendHoldings.length > 0 ? backendHoldings : virtualHoldings
 
-  const total = (() => {
+  // Effective prices: live > SEED
+  const effectivePrices = useMemo(() => ({ ...SEED_PRICES, ...livePrices }), [livePrices])
+
+  const total = useMemo(() => {
     if (Number(data?.total_balance_usd || 0) > 0) return Number(data.total_balance_usd)
     return virtualHoldings.reduce((sum, h) => sum + Number(h.usd_value), 0)
-  })()
+  }, [data, virtualHoldings])
 
   const backendAllocation = allocationQuery.data?.allocation || []
   const allocation = backendAllocation.length > 0
@@ -103,20 +119,17 @@ export default function PortfolioPage() {
         usd_value: h.usd_value,
       }))
 
-  const holdingsCount = holdings.length
+  const btcPrice = effectivePrices.BTC || 68429
+  const btcEquivalent = total > 0 ? (total / btcPrice).toFixed(8) : (Number(data?.total_btc || 0)).toFixed(8)
 
-  useEffect(() => {
-    if (!websocket) return
-    return websocket.subscribe('market.tickers', () => {
-      refetchPortfolio()
-      refetchAllocation()
-      setVirtualHoldings(getVirtualHoldings())
-    })
-  }, [websocket, refetchPortfolio, refetchAllocation])
+  function refresh() {
+    refetchPortfolio()
+    refetchAllocation()
+    refreshVirtual()
+  }
 
   return (
     <ProductShell title="Portfolio" subtitle="Live valuation, allocation, and available balances.">
-      {/* Stat cards */}
       <div className="grid gap-3 md:grid-cols-3">
         <StatCard
           label="Total balance"
@@ -125,32 +138,24 @@ export default function PortfolioPage() {
         />
         <StatCard
           label="BTC equivalent"
-          value={Number(data?.total_btc || total / 68429).toFixed(8)}
-          detail="Portfolio in BTC"
+          value={btcEquivalent}
+          detail={`@ $${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
         />
         <StatCard
           label="Assets held"
-          value={data?.holdings_count || holdingsCount}
+          value={data?.holdings_count || holdings.length}
           detail="Non-zero balances"
         />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_340px]">
         {/* Holdings table */}
         <div className="panel overflow-hidden">
           <div className="panel-title">
             <span>Holdings</span>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  refetchPortfolio()
-                  refetchAllocation()
-                  setVirtualHoldings(getVirtualHoldings())
-                }}
-                className="text-slate-600 hover:text-slate-300"
-                title="Refresh"
-              >
-                <RefreshCw size={14} />
+              <button onClick={refresh} className="text-slate-600 hover:text-slate-300" title="Refresh">
+                <RefreshCw size={13} />
               </button>
               <StatusPill tone={holdings.length ? 'success' : 'neutral'}>
                 {holdings.length ? 'Funded' : 'Empty'}
@@ -168,8 +173,15 @@ export default function PortfolioPage() {
                 <span className="text-right">Allocation</span>
               </div>
               {holdings.map((item, idx) => {
-                const pct = total ? Math.min(100, (Number(item.usd_value) / total) * 100) : 0
+                const usdVal = Number(item.usd_value)
+                const pct = total > 0 ? Math.min(100, (usdVal / total) * 100) : 0
                 const colorClass = ASSET_COLORS[idx % ASSET_COLORS.length]
+                // Recalculate usd_value with live prices for virtual holdings
+                const livePrice = livePrices[item.asset]
+                const displayUsd = livePrice
+                  ? (Number(item.total) * livePrice)
+                  : usdVal
+
                 return (
                   <div key={item.asset} className="border-b border-white/5 px-4 py-3">
                     <div className="grid grid-cols-5 items-center text-sm">
@@ -181,12 +193,12 @@ export default function PortfolioPage() {
                         </span>
                         {item.asset}
                       </span>
-                      <span className="text-right font-mono text-slate-300">{Number(item.total).toFixed(6)}</span>
-                      <span className="text-right font-mono text-slate-500">{Number(item.available).toFixed(6)}</span>
-                      <span className="text-right font-mono font-semibold text-white">
-                        ${Number(item.usd_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="text-right font-mono text-slate-300 tabular-nums">{Number(item.total).toFixed(6)}</span>
+                      <span className="text-right font-mono text-slate-500 tabular-nums">{Number(item.available).toFixed(6)}</span>
+                      <span className="text-right font-mono font-semibold text-white tabular-nums">
+                        ${displayUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
-                      <span className="text-right font-mono text-slate-500">{pct.toFixed(1)}%</span>
+                      <span className="text-right font-mono text-slate-500 tabular-nums">{pct.toFixed(1)}%</span>
                     </div>
                     <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.04]">
                       <div
@@ -200,7 +212,11 @@ export default function PortfolioPage() {
             </div>
           ) : (
             <EmptyState>
-              No holdings yet. Go to <Link href="/wallets" className="text-amber-400 hover:underline">Wallets</Link> to deposit, or start trading on the <Link href="/" className="text-amber-400 hover:underline">main page</Link> with your demo balance.
+              No holdings yet.{' '}
+              <Link href="/wallets" className="text-amber-400 hover:underline">Deposit funds</Link>
+              {' '}or start trading on the{' '}
+              <Link href="/" className="text-amber-400 hover:underline">main page</Link>
+              {' '}with your demo balance.
             </EmptyState>
           )}
         </div>
@@ -212,14 +228,15 @@ export default function PortfolioPage() {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-white">Allocation</div>
-                <div className="text-xs text-slate-600">Current portfolio split</div>
+                <div className="text-xs text-slate-600">Portfolio split</div>
               </div>
-              <PieChart size={18} className="text-amber-400" />
+              <PieChart size={16} className="text-amber-400" />
             </div>
             {allocation.length > 0 ? (
               <div className="space-y-3">
                 {allocation.slice(0, 8).map((item, idx) => {
                   const colorClass = ASSET_COLORS[idx % ASSET_COLORS.length]
+                  const pct = Number(item.percent || 0)
                   return (
                     <div key={item.asset}>
                       <div className="mb-1 flex justify-between text-xs">
@@ -227,12 +244,12 @@ export default function PortfolioPage() {
                           <span className={`inline-block h-2 w-2 rounded-full bg-gradient-to-r ${colorClass}`} />
                           {item.asset}
                         </span>
-                        <span className="text-slate-500">{Number(item.percent || 0).toFixed(1)}%</span>
+                        <span className="font-mono text-slate-500 tabular-nums">{pct.toFixed(1)}%</span>
                       </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
                         <div
                           className={`h-full rounded-full bg-gradient-to-r ${colorClass} transition-all duration-500`}
-                          style={{ width: `${Math.min(100, Number(item.percent || 0))}%` }}
+                          style={{ width: `${Math.min(100, pct)}%` }}
                         />
                       </div>
                     </div>
@@ -246,18 +263,12 @@ export default function PortfolioPage() {
 
           {/* Quick links */}
           <div className="grid gap-3">
-            <Link
-              href="/wallets"
-              className="panel flex items-center gap-3 p-4 text-sm text-white transition hover:border-amber-400/30"
-            >
-              <ArrowDownToLine size={18} className="text-amber-400" />
+            <Link href="/wallets" className="panel flex items-center gap-3 p-4 text-sm text-white transition hover:border-amber-400/30">
+              <ArrowDownToLine size={16} className="text-amber-400" />
               Deposit funds
             </Link>
-            <Link
-              href="/"
-              className="panel flex items-center gap-3 p-4 text-sm text-white transition hover:border-emerald-400/30"
-            >
-              <ArrowUpRight size={18} className="text-emerald-400" />
+            <Link href="/" className="panel flex items-center gap-3 p-4 text-sm text-white transition hover:border-emerald-400/30">
+              <ArrowUpRight size={16} className="text-emerald-400" />
               Start trading
             </Link>
           </div>

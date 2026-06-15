@@ -6,10 +6,10 @@ import { ProductShell, EmptyState, StatusPill } from '@/components/ProductShell'
 import { apiClient } from '@/services/api'
 
 export default function AdminTradesPage() {
-  // Admins can see all recent trades via the public market endpoint
+  // Admins can see all recent trades via the admin endpoints
   const { data, error } = useQuery({
     queryKey: ['admin-recent-trades'],
-    queryFn: () => apiClient.get('/trades'),
+    queryFn: () => apiClient.get('/admin/trades'),
     retry: 1,
   })
   const trades = data?.trades || []

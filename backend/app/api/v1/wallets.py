@@ -491,15 +491,16 @@ async def get_withdrawals(
     limit: int = Query(20, ge=1, le=100),
 ):
     offset = (page - 1) * limit
-    withdrawals = (
+    rows = (
         await db.execute(
-            select(Withdrawal)
+            select(Withdrawal, Asset)
+            .join(Asset, Withdrawal.asset_id == Asset.id)
             .where(Withdrawal.user_id == user_id)
             .order_by(Withdrawal.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
-    ).scalars().all()
+    ).all()
     total = (
         await db.execute(select(func.count()).select_from(Withdrawal).where(Withdrawal.user_id == user_id))
     ).scalar()
@@ -507,6 +508,7 @@ async def get_withdrawals(
         "withdrawals": [
             {
                 "id": str(w.id),
+                "asset": asset.symbol,
                 "address": w.address,
                 "amount": str(w.amount),
                 "fee": str(w.fee),
@@ -515,9 +517,10 @@ async def get_withdrawals(
                 "tx_hash": w.tx_hash,
                 "created_at": w.created_at.isoformat() if w.created_at else None,
             }
-            for w in withdrawals
+            for w, asset in rows
         ],
         "total": total,
         "page": page,
         "limit": limit,
     }
+
