@@ -1,8 +1,10 @@
 """Kafka event producer for publishing domain events."""
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
+
 from aiokafka import AIOKafkaProducer
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -11,8 +13,8 @@ logger = logging.getLogger(__name__)
 class KafkaEventProducer:
     """Singleton Kafka producer for publishing domain events."""
 
-    _instance: Optional["KafkaEventProducer"] = None
-    _producer: Optional[AIOKafkaProducer] = None
+    _instance: "KafkaEventProducer | None" = None
+    _producer: AIOKafkaProducer | None = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -111,7 +113,7 @@ class KafkaEventProducer:
         )
 
 
-_producer_instance: Optional[KafkaEventProducer] = None
+_producer_instance: KafkaEventProducer | None = None
 
 
 async def get_kafka_producer() -> KafkaEventProducer:

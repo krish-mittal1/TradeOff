@@ -65,17 +65,17 @@ class LogoutRequest(BaseModel):
 async def register(req: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Register a new user."""
     email = sanitize_email(req.email)
-    
+
     # Validate password
     is_valid, reason = validate_password_strength(req.password)
     if not is_valid:
         raise HTTPException(status_code=400, detail=reason)
-    
+
     # Check if user exists
     result = await db.execute(select(User).where(User.email == email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
-    
+
     # Generate unique referral code for new user
     import random
     import string
@@ -89,7 +89,7 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
         display_name=email.split("@")[0],
         referral_code=user_ref_code,
     )
-    
+
     # Process referral code if provided
     if req.referral_code:
         referrer_result = await db.execute(
@@ -99,6 +99,7 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
         if referrer:
             user.referred_by = referrer.id
             from decimal import Decimal
+
             from app.models.referral import Referral
             referral_record = Referral(
                 referrer_id=referrer.id,
@@ -123,7 +124,7 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
         )
     )
     user.last_login_at = datetime.now(timezone.utc)
-    
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -135,23 +136,23 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
 async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return JWT tokens."""
     email = sanitize_email(req.email)
-    
+
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
-    
+
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     if user.mfa_enabled:
         if not req.totp_code:
             raise HTTPException(status_code=401, detail="MFA code required")
         if not verify_totp(user.mfa_secret, req.totp_code):
             raise HTTPException(status_code=401, detail="Invalid MFA code")
-    
+
     # Create tokens
     access_token = create_access_token(user.id, role=user.role)
     refresh_token = create_refresh_token(user.id)
-    
+
     # Store session
     session = DBSession(
         user_id=user.id,
@@ -160,9 +161,9 @@ async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(
         expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
     db.add(session)
-    
+
     user.last_login_at = datetime.now(timezone.utc)
-    
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -176,7 +177,7 @@ async def refresh_token(req: RefreshRequest, db: AsyncSession = Depends(get_db))
     payload = verify_token(req.refresh_token, expected_type="refresh")
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    
+
     user_id = uuid.UUID(payload["sub"])
 
     session_hash = hash_token(req.refresh_token)
@@ -206,7 +207,7 @@ async def refresh_token(req: RefreshRequest, db: AsyncSession = Depends(get_db))
             + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
-    
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=new_refresh_token,

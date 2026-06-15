@@ -1,10 +1,12 @@
 """Market data models for candlestick data."""
-from decimal import Decimal
 import uuid
 from datetime import datetime
-from sqlalchemy import Integer, String, ForeignKey, Numeric, DateTime, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base
 
 

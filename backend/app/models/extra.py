@@ -1,9 +1,11 @@
 """Copy trading, watchlist, and favorites models."""
-from decimal import Decimal
 import uuid
-from sqlalchemy import Boolean, Integer, SmallInteger, String, ForeignKey, Numeric
+from decimal import Decimal
+
+from sqlalchemy import Boolean, ForeignKey, Numeric, SmallInteger, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 

@@ -1,6 +1,6 @@
 """Pre-trade risk checks."""
-from decimal import Decimal
 import uuid
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import func, select

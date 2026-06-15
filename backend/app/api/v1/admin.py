@@ -1,14 +1,14 @@
 """Admin API endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
-from datetime import datetime, timezone
 import uuid
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.dependencies import require_admin
 from app.db.session import get_db
 from app.models.user import User
-from app.api.v1.dependencies import require_admin
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -128,8 +128,8 @@ async def admin_get_trades(
     db: AsyncSession = Depends(get_db),
 ):
     """Get all executed trades in the exchange (admin only)."""
-    from app.models.trade import Trade
     from app.models.asset import TradingPair
+    from app.models.trade import Trade
 
     offset = (page - 1) * limit
     query = (
@@ -153,7 +153,8 @@ async def admin_get_trades(
                 "price": str(t.price),
                 "quantity": str(t.quantity),
                 "quote_quantity": str(t.quote_quantity),
-                "role": "taker",
+                "taker_side": str(t.taker_side),
+                "maker_side": "BUY" if str(t.taker_side) == "SELL" else "SELL",
                 "timestamp": int(t.trade_timestamp.timestamp() * 1000),
             }
             for t, tp in rows

@@ -4,8 +4,8 @@ For horizontal scale, instances publish through Redis Pub/Sub and each gateway
 fans messages out to its locally connected clients.
 """
 import asyncio
-from collections import defaultdict
 import json
+from collections import defaultdict
 from typing import Any
 
 from fastapi import WebSocket

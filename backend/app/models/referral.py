@@ -1,9 +1,11 @@
 """Referral model."""
-from decimal import Decimal
 import uuid
-from sqlalchemy import String, ForeignKey, Numeric, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 

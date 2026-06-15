@@ -2,8 +2,9 @@
 
 Validates Bearer tokens on protected routes and injects user_id into request state.
 """
-from fastapi import Request, HTTPException
 import uuid
+
+from fastapi import HTTPException, Request
 from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse

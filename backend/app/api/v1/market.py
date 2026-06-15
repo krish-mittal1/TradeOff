@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -27,7 +27,7 @@ async def get_candles(
     # Convert from/to to datetime
     from_dt = datetime.fromtimestamp(from_time / 1000, tz=timezone.utc) if from_time else None
     to_dt = datetime.fromtimestamp(to_time / 1000, tz=timezone.utc) if to_time else None
-    
+
     # Get trading pair
     result = await db.execute(
         select(TradingPair).where(TradingPair.symbol == pair.upper())
@@ -35,7 +35,7 @@ async def get_candles(
     trading_pair = result.scalar_one_or_none()
     if not trading_pair:
         raise HTTPException(status_code=404, detail="Trading pair not found")
-    
+
     query = select(Candle).where(
         Candle.trading_pair_id == trading_pair.id,
         Candle.interval == interval,
@@ -44,11 +44,11 @@ async def get_candles(
         query = query.where(Candle.time >= from_dt)
     if to_dt:
         query = query.where(Candle.time <= to_dt)
-    
+
     query = query.order_by(Candle.time.desc()).limit(limit)
     result = await db.execute(query)
     candles = result.scalars().all()
-    
+
     return [
         {
             "time": int(c.time.timestamp() * 1000),
@@ -88,13 +88,13 @@ async def get_ticker(
     trading_pair = pair_result.scalar_one_or_none()
     if not trading_pair:
         raise HTTPException(status_code=404, detail="Trading pair not found")
-    
+
     engine = get_engine(pair.upper())
     live_tick = market_data_service.get_tick(pair.upper())
     last_price = live_tick.price if live_tick else engine.last_price
     best_bid = engine.best_bid
     best_ask = engine.best_ask
-    
+
     # Get 24h stats
     since = datetime.now(timezone.utc) - timedelta(hours=24)
     result = await db.execute(
@@ -107,7 +107,7 @@ async def get_ticker(
         ).where(Trade.trading_pair_id == trading_pair.id, Trade.trade_timestamp >= since)
     )
     stats = result.one()
-    
+
     # Get open price (24h ago)
     result = await db.execute(
         select(Trade.price).where(
@@ -117,7 +117,7 @@ async def get_ticker(
         .order_by(Trade.trade_timestamp.desc()).limit(1)
     )
     open_price = result.scalar()
-    
+
     return {
         "symbol": pair.upper(),
         "price": str(last_price) if last_price else "0",
@@ -145,7 +145,7 @@ async def get_recent_trades(
         .order_by(Trade.trade_timestamp.desc()).limit(limit)
     )
     trades = result.scalars().all()
-    
+
     return [
         {
             "id": str(t.id),
@@ -166,7 +166,7 @@ async def get_all_tickers(db: AsyncSession = Depends(get_db)):
         select(TradingPair).where(TradingPair.is_active.is_(True))
     )
     pairs = result.scalars().all()
-    
+
     tickers = []
     for pair in pairs:
         try:
@@ -187,7 +187,7 @@ async def get_all_tickers(db: AsyncSession = Depends(get_db)):
                 "best_bid": "0",
                 "best_ask": "0",
             })
-    
+
     return tickers
 
 
@@ -201,7 +201,7 @@ async def get_trading_pairs(db: AsyncSession = Depends(get_db)):
         .order_by(TradingPair.symbol)
     )
     pairs = result.scalars().all()
-    
+
     return [
         {
             "symbol": p.symbol,

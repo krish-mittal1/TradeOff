@@ -1,12 +1,13 @@
 """Trades API endpoint."""
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 import uuid
 
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.dependencies import current_user_id
 from app.db.session import get_db
 from app.models.trade import Trade
-from app.api.v1.dependencies import current_user_id
 
 router = APIRouter()
 
@@ -23,6 +24,7 @@ async def get_trades(
 ):
     """Get trade history for a user."""
     from datetime import datetime, timezone
+
     from app.models.asset import TradingPair
 
     offset = (page - 1) * limit

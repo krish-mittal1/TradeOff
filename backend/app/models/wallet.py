@@ -1,10 +1,22 @@
 """Wallet, LedgerEntry, Deposit, and Withdrawal models."""
-from decimal import Decimal
 import uuid
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Integer, String, ForeignKey, Numeric, DateTime, Text, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 

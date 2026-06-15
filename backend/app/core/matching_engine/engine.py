@@ -3,17 +3,20 @@
 Supports market, limit, stop-market, stop-limit, and iceberg orders
 with partial fills, full fills, and FIFO ordering.
 """
-from decimal import Decimal
-import uuid
 import asyncio
-from datetime import datetime, timezone
+import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from datetime import datetime, timezone
+from decimal import Decimal
 
-from app.core.matching_engine.orders import (
-    EngineOrder, OrderSide, OrderType, OrderStatus, TimeInForce,
-)
 from app.core.matching_engine.order_book import OrderBook
+from app.core.matching_engine.orders import (
+    EngineOrder,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    TimeInForce,
+)
 
 
 @dataclass
@@ -38,7 +41,7 @@ class Trade:
 class MatchResult:
     """Result of processing an order through the matching engine."""
     trades: list[Trade] = field(default_factory=list)
-    taker_order: Optional[EngineOrder] = None
+    taker_order: EngineOrder | None = None
     maker_orders_filled: list[EngineOrder] = field(default_factory=list)
     remaining_quantity: Decimal = Decimal("0")
     is_complete: bool = False
@@ -357,13 +360,13 @@ class MatchingEngine:
         return self.order_book.get_depth(limit=limit)
 
     @property
-    def best_bid(self) -> Optional[Decimal]:
+    def best_bid(self) -> Decimal | None:
         return self.order_book.best_bid
 
     @property
-    def best_ask(self) -> Optional[Decimal]:
+    def best_ask(self) -> Decimal | None:
         return self.order_book.best_ask
 
     @property
-    def last_price(self) -> Optional[Decimal]:
+    def last_price(self) -> Decimal | None:
         return self.order_book.last_trade_price

@@ -1,17 +1,15 @@
 """Security utilities: JWT, password hashing, TOTP MFA, API keys."""
-import uuid
-import secrets
 import hashlib
 import hmac
+import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
-from typing import Optional
 
-from jose import jwt, JWTError
-from passlib.context import CryptContext
 import pyotp
 import qrcode
 import qrcode.image.svg
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from app.config import settings
 

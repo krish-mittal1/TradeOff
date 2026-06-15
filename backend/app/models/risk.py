@@ -1,9 +1,11 @@
 """Risk limit model."""
-from decimal import Decimal
 import uuid
-from sqlalchemy import Boolean, Integer, String, ForeignKey, Numeric, Text
+from decimal import Decimal
+
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 

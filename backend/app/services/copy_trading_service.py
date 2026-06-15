@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 from typing import Awaitable, Callable
 
 from fastapi import HTTPException

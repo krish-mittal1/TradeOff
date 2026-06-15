@@ -1,9 +1,10 @@
 """Copy trading leaderboards and follower relationships."""
 import uuid
 from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user_id
@@ -23,8 +24,7 @@ class FollowRequest(BaseModel):
 
 @router.get("/leaderboard")
 async def leaderboard(db: AsyncSession = Depends(get_db)):
-    from app.models.asset import TradingPair
-    from sqlalchemy import case, literal
+    from sqlalchemy import case
 
     # Get trade stats per user: volume, trade count, and a rough PnL estimate
     # PnL = sum of sell proceeds - sum of buy costs (from taker perspective)

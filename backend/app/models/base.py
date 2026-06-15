@@ -1,7 +1,8 @@
 """Base model class with common columns."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, String
+
+from sqlalchemy import DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 

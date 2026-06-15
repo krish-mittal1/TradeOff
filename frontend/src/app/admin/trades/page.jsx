@@ -27,11 +27,12 @@ export default function AdminTradesPage() {
           Recent Trades
           <StatusPill>{trades.length} shown</StatusPill>
         </div>
-        <div className="grid grid-cols-5 border-b border-white/5 px-4 py-3 text-xs uppercase tracking-wider text-slate-600">
+        <div className="grid grid-cols-6 border-b border-white/5 px-4 py-3 text-xs uppercase tracking-wider text-slate-600">
           <span>Pair</span>
           <span>Price</span>
           <span>Quantity</span>
-          <span>Role</span>
+          <span>Quote</span>
+          <span>Taker Side</span>
           <span>Time</span>
         </div>
         {error ? (
@@ -40,12 +41,15 @@ export default function AdminTradesPage() {
           trades.map((t) => (
             <div
               key={t.id}
-              className="grid grid-cols-5 border-b border-white/5 px-4 py-3 text-xs font-mono"
+              className="grid grid-cols-6 border-b border-white/5 px-4 py-3 text-xs font-mono"
             >
               <span className="text-white">{t.pair}</span>
-              <span className="text-slate-300">{t.price}</span>
+              <span className="text-slate-300">{Number(t.price).toLocaleString()}</span>
               <span className="text-slate-300">{t.quantity}</span>
-              <span className={t.role === 'taker' ? 'text-amber-400' : 'text-slate-500'}>{t.role}</span>
+              <span className="text-slate-500">{Number(t.quote_quantity || 0).toFixed(2)}</span>
+              <span className={t.taker_side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}>
+                {t.taker_side || '—'}
+              </span>
               <span className="text-slate-600">
                 {new Date(t.timestamp).toLocaleTimeString()}
               </span>

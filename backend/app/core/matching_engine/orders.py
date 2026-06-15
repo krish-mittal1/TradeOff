@@ -1,10 +1,9 @@
 """Order types, enums, and models for the matching engine."""
-from decimal import Decimal
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
 from dataclasses import dataclass, field
-from typing import Optional
+from datetime import datetime, timezone
+from decimal import Decimal
+from enum import Enum
 
 
 class OrderSide(str, Enum):
@@ -45,17 +44,17 @@ class EngineOrder:
     trading_pair: str
     side: OrderSide
     order_type: OrderType
-    price: Optional[Decimal] = None  # None for market orders
+    price: Decimal | None = None  # None for market orders
     quantity: Decimal = Decimal("0")
     filled_quantity: Decimal = Decimal("0")
-    quote_quantity: Optional[Decimal] = None  # For market orders in quote terms
-    stop_price: Optional[Decimal] = None
+    quote_quantity: Decimal | None = None  # For market orders in quote terms
+    stop_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
-    iceberg_peak: Optional[Decimal] = None
-    iceberg_base: Optional[Decimal] = Decimal("0")
+    iceberg_peak: Decimal | None = None
+    iceberg_base: Decimal | None = Decimal("0")
     status: OrderStatus = OrderStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
     @property
     def remaining_quantity(self) -> Decimal:
@@ -67,9 +66,7 @@ class EngineOrder:
 
     @property
     def is_expired(self) -> bool:
-        if self.expires_at and datetime.now(timezone.utc) >= self.expires_at:
-            return True
-        return False
+        return bool(self.expires_at and datetime.now(timezone.utc) >= self.expires_at)
 
     @property
     def is_iceberg(self) -> bool:
@@ -90,7 +87,7 @@ class EngineOrder:
         if self.status in (OrderStatus.OPEN, OrderStatus.PENDING, OrderStatus.PARTIALLY_FILLED):
             self.status = OrderStatus.CANCELLED
 
-    def reveal_iceberg_peak(self) -> Optional[Decimal]:
+    def reveal_iceberg_peak(self) -> Decimal | None:
         """Reveal the next iceberg peak. Returns visible quantity or None."""
         if not self.is_iceberg:
             return None

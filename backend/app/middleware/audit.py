@@ -4,6 +4,7 @@ IMPORTANT: This middleware must NOT consume the request body because that would
 break downstream handlers.  We log metadata only (method, path, user-id).
 """
 import logging
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 

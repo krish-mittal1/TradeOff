@@ -1,13 +1,13 @@
 """Transactional wallet reservation, release, and trade settlement."""
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset, TradingPair
+from app.models.asset import TradingPair
 from app.models.wallet import LedgerEntry, UserWallet
 
 

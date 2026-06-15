@@ -1,20 +1,21 @@
 """V1 API router - aggregates all endpoint modules."""
 from fastapi import APIRouter
-from app.api.v1.auth import router as auth_router
-from app.api.v1.wallets import router as wallets_router
-from app.api.v1.trading import router as trading_router
-from app.api.v1.market import router as market_router
+
 from app.api.v1.admin import router as admin_router
-from app.api.v1.portfolio import router as portfolio_router
-from app.api.v1.trades import router as trades_router
 from app.api.v1.ai_assistant import router as ai_router
-from app.api.v1.users import router as users_router
-from app.api.v1.notifications import router as notifications_router
-from app.api.v1.risk import router as risk_router
-from app.api.v1.copy_trading import router as copy_trading_router
 from app.api.v1.analytics import router as analytics_router
-from app.api.v1.operations import router as operations_router
+from app.api.v1.auth import router as auth_router
+from app.api.v1.copy_trading import router as copy_trading_router
 from app.api.v1.demo import router as demo_router
+from app.api.v1.market import router as market_router
+from app.api.v1.notifications import router as notifications_router
+from app.api.v1.operations import router as operations_router
+from app.api.v1.portfolio import router as portfolio_router
+from app.api.v1.risk import router as risk_router
+from app.api.v1.trades import router as trades_router
+from app.api.v1.trading import router as trading_router
+from app.api.v1.users import router as users_router
+from app.api.v1.wallets import router as wallets_router
 
 api_router = APIRouter()
 

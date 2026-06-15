@@ -1,27 +1,27 @@
 """TradeOff - FastAPI application factory."""
 import bcrypt
+
 # Workaround for passlib + bcrypt >= 4.0.0 compatibility
 if not hasattr(bcrypt, "__about__"):
     bcrypt.__about__ = type("About", (object,), {"__version__": bcrypt.__version__})
 
 import asyncio
 import logging
-import json
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
-from app.config import settings
 from app.api.v1.api import api_router
-from app.middleware.request_id import RequestIDMiddleware
-from app.middleware.rate_limit import RateLimitMiddleware
+from app.config import settings
+from app.db.session import async_session_factory, engine
 from app.middleware.audit import AuditMiddleware
-from app.db.session import engine, async_session_factory
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.request_id import RequestIDMiddleware
 from app.models import Base
-from app.observability import MetricsMiddleware, WS_CONNECTIONS
+from app.observability import WS_CONNECTIONS, MetricsMiddleware
 from app.realtime.manager import manager
 from app.services.market_data_service import market_data_service
 from app.utils.security import verify_token
@@ -31,10 +31,11 @@ logger = logging.getLogger(__name__)
 
 async def periodic_expire_orders():
     """Background task to query and expire GTD orders periodically."""
-    from app.tasks.jobs import _expire_orders
     import logging
+
+    from app.tasks.jobs import _expire_orders
     task_logger = logging.getLogger("app.main.periodic_expire_orders")
-    
+
     while True:
         try:
             await asyncio.sleep(60)
@@ -49,32 +50,34 @@ async def periodic_expire_orders():
 
 async def periodic_market_maker():
     """Background task to periodically refresh order book liquidity."""
+    import logging
     from decimal import Decimal
+
+    from sqlalchemy import update
+
     from app.api.v1.demo import (
+        LIQUIDITY_BALANCES,
+        PAIR_SPECS,
         ensure_assets_and_pairs,
+        ensure_liquidity_order,
         ensure_liquidity_user,
         reset_wallet_balance,
-        ensure_liquidity_order,
-        PAIR_SPECS,
-        LIQUIDITY_BALANCES,
     )
-    from app.services.market_data_service import market_data_service
-    from app.models.order import Order
     from app.api.v1.trading import get_engine
     from app.core.matching_engine import OrderSide
-    from sqlalchemy import update
-    import logging
-    
+    from app.models.order import Order
+    from app.services.market_data_service import market_data_service
+
     task_logger = logging.getLogger("app.main.periodic_market_maker")
     # Wait for startup dependencies to be fully ready
     await asyncio.sleep(15)
-    
+
     while True:
         try:
             async with async_session_factory() as db:
                 assets, pairs = await ensure_assets_and_pairs(db)
                 liquidity_user = await ensure_liquidity_user(db)
-                
+
                 # Cancel existing demo-liq orders to refresh them
                 await db.execute(
                     update(Order).where(
@@ -86,7 +89,7 @@ async def periodic_market_maker():
                     )
                 )
                 await db.flush()
-                
+
                 # Reset liquidity user balances
                 for symbol, amount in LIQUIDITY_BALANCES.items():
                     await reset_wallet_balance(
@@ -95,17 +98,17 @@ async def periodic_market_maker():
                         asset=assets[symbol],
                         available=amount,
                     )
-                
+
                 # Clear existing in-memory matching engines to rebuild them clean
                 from app.api.v1 import trading
                 for symbol in pairs:
                     trading._engines.pop(symbol, None)
-                
+
                 for symbol, _, _, _, _, _, _, _, tick_size, step_size, mid in PAIR_SPECS:
                     pair = pairs[symbol]
                     live_tick = market_data_service.get_tick(symbol)
                     mid = live_tick.price if live_tick else mid
-                    
+
                     from app.services.copy_trading_service import floor_to_step
                     base_quantity = floor_to_step(
                         max(pair.min_qty, pair.min_notional / mid if mid > 0 else pair.min_qty),
@@ -113,12 +116,12 @@ async def periodic_market_maker():
                     )
                     if base_quantity < pair.min_qty:
                         base_quantity = pair.min_qty
-                        
+
                     for index in range(1, 6):
                         bid_price = max(tick_size, mid - (tick_size * Decimal(index * 25)))
                         ask_price = mid + (tick_size * Decimal(index * 25))
                         quantity = floor_to_step(base_quantity * Decimal(index), step_size)
-                        
+
                         await ensure_liquidity_order(
                             db,
                             liquidity_user=liquidity_user,
@@ -137,16 +140,16 @@ async def periodic_market_maker():
                             quantity=quantity,
                             client_order_id=f"demo-liq:{symbol}:ask:{index}",
                         )
-                    
+
                     get_engine(symbol).order_book.last_trade_price = mid
-                
+
                 await db.commit()
                 task_logger.debug("Successfully refreshed order book liquidity.")
         except asyncio.CancelledError:
             break
         except Exception as e:
             task_logger.exception(f"Error in periodic_market_maker task: {e}")
-            
+
         await asyncio.sleep(30)
 
 @asynccontextmanager
@@ -236,6 +239,7 @@ app.add_middleware(
 )
 app.add_middleware(RequestIDMiddleware)
 from app.middleware.auth import AuthMiddleware
+
 app.add_middleware(AuthMiddleware)
 app.add_middleware(AuditMiddleware)
 app.add_middleware(RateLimitMiddleware)

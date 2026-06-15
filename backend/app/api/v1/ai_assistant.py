@@ -1,7 +1,9 @@
 """AI Trading Assistant API endpoint."""
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 import uuid
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
 from app.api.v1.dependencies import current_user_id
 
 router = APIRouter()

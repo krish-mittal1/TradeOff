@@ -1,11 +1,11 @@
 """Spot trading API with reservation, matching, settlement, and event publication."""
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user_id, require_api_permission
@@ -15,11 +15,11 @@ from app.events.kafka_producer import get_kafka_producer
 from app.models.asset import TradingPair
 from app.models.order import Order
 from app.models.trade import Trade
-from app.services.wallet_service import release_order_funds, reserve_order_funds, settle_trade
-from app.services.risk_service import enforce_pre_trade_limits
-from app.services.copy_trading_service import is_copy_order, replicate_leader_limit_order
-from app.realtime.manager import manager
 from app.observability import ORDERS, TRADES
+from app.realtime.manager import manager
+from app.services.copy_trading_service import is_copy_order, replicate_leader_limit_order
+from app.services.risk_service import enforce_pre_trade_limits
+from app.services.wallet_service import release_order_funds, reserve_order_funds, settle_trade
 
 router = APIRouter()
 _engines: dict[str, MatchingEngine] = {}

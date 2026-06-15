@@ -1,17 +1,19 @@
 """Redis client wrapper with connection pooling."""
 import json
-from typing import Any, Optional
+from typing import Any
+
 from redis.asyncio import Redis, from_url
+
 from app.config import settings
 
 
 class RedisClient:
     """Wrapper around Redis async client with helper methods."""
 
-    _instance: Optional["RedisClient"] = None
+    _instance: "RedisClient | None" = None
 
     def __init__(self):
-        self.client: Optional[Redis] = None
+        self.client: Redis | None = None
 
     @classmethod
     async def get_instance(cls) -> "RedisClient":
@@ -24,7 +26,7 @@ class RedisClient:
             )
         return cls._instance
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         return await self.client.get(key)
 
     async def set(self, key: str, value: str, expire: int = 3600) -> None:
@@ -33,7 +35,7 @@ class RedisClient:
     async def set_json(self, key: str, value: Any, expire: int = 3600) -> None:
         await self.client.set(key, json.dumps(value), ex=expire)
 
-    async def get_json(self, key: str) -> Optional[Any]:
+    async def get_json(self, key: str) -> Any | None:
         val = await self.client.get(key)
         if val:
             return json.loads(val)

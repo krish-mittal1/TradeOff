@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
 import json
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -77,12 +77,12 @@ class Settings(BaseSettings):
     DEFAULT_TAKER_FEE: float = 0.001
 
     # AI
-    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: str | None = None
     AI_MODEL: str = "gpt-4"
     AI_MAX_TOKENS: int = 2000
 
     # Monitoring
-    SENTRY_DSN: Optional[str] = None
+    SENTRY_DSN: str | None = None
     PROMETHEUS_ENABLED: bool = True
     OPENTELEMETRY_ENABLED: bool = False
 

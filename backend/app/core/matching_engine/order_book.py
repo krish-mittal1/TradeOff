@@ -3,11 +3,11 @@
 Maintains bid and ask sides as sorted dictionaries for O(log N) operations.
 Each price level has a FIFO queue for time priority.
 """
-from decimal import Decimal
 import uuid
-from collections import deque, defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Optional
+from decimal import Decimal
+
 from app.core.matching_engine.orders import EngineOrder, OrderSide
 
 
@@ -32,7 +32,7 @@ class PriceLevel:
         self.total_quantity -= removed_qty
         self.orders = new_orders
 
-    def pop_best(self) -> Optional[EngineOrder]:
+    def pop_best(self) -> EngineOrder | None:
         """Pop the oldest (best-priority) order from this level."""
         if not self.orders:
             return None
@@ -40,7 +40,7 @@ class PriceLevel:
         self.total_quantity -= order.remaining_quantity
         return order
 
-    def peek_best(self) -> Optional[EngineOrder]:
+    def peek_best(self) -> EngineOrder | None:
         """View the best-priority order without removing it."""
         return self.orders[0] if self.orders else None
 
@@ -70,7 +70,7 @@ class OrderBook:
         self.orders_by_id: dict[uuid.UUID, EngineOrder] = {}
         # Sequence counter
         self.sequence: int = 0
-        self.last_trade_price: Optional[Decimal] = None
+        self.last_trade_price: Decimal | None = None
 
     # --- Bid/Ask Management ---
 
@@ -152,24 +152,24 @@ class OrderBook:
     # --- Best Bid/Ask ---
 
     @property
-    def best_bid(self) -> Optional[Decimal]:
+    def best_bid(self) -> Decimal | None:
         """Highest bid price."""
         return self.bid_prices[0] if self.bid_prices else None
 
     @property
-    def best_ask(self) -> Optional[Decimal]:
+    def best_ask(self) -> Decimal | None:
         """Lowest ask price."""
         return self.ask_prices[0] if self.ask_prices else None
 
     @property
-    def spread(self) -> Optional[Decimal]:
+    def spread(self) -> Decimal | None:
         """Current bid-ask spread."""
         if self.best_bid and self.best_ask:
             return self.best_ask - self.best_bid
         return None
 
     @property
-    def mid_price(self) -> Optional[Decimal]:
+    def mid_price(self) -> Decimal | None:
         """Midpoint between best bid and ask."""
         if self.best_bid and self.best_ask:
             return (self.best_bid + self.best_ask) / Decimal("2")
@@ -207,7 +207,7 @@ class OrderBook:
 
     # --- Order Matching ---
 
-    def get_best_order(self, side: OrderSide) -> Optional[EngineOrder]:
+    def get_best_order(self, side: OrderSide) -> EngineOrder | None:
         """Get the highest-priority order on the given side without removing."""
         price_list = self.bid_prices if side == OrderSide.BUY else self.ask_prices
         levels = self.bids if side == OrderSide.BUY else self.asks
@@ -219,7 +219,7 @@ class OrderBook:
             return None
         return level.peek_best()
 
-    def pop_best_order(self, side: OrderSide) -> Optional[EngineOrder]:
+    def pop_best_order(self, side: OrderSide) -> EngineOrder | None:
         """Pop and return the best-priority order from the given side."""
         price_list = self.bid_prices if side == OrderSide.BUY else self.ask_prices
         levels = self.bids if side == OrderSide.BUY else self.asks
@@ -240,7 +240,7 @@ class OrderBook:
             self._remove_sorted(price_list, best_price)
         return order
 
-    def get_order(self, order_id: uuid.UUID) -> Optional[EngineOrder]:
+    def get_order(self, order_id: uuid.UUID) -> EngineOrder | None:
         """Get a resting order by ID in O(1)."""
         return self.orders_by_id.get(order_id)
 

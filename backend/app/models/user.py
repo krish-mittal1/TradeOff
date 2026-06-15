@@ -1,9 +1,11 @@
 """User, Session, and ApiKey models."""
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, INET, JSONB
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 

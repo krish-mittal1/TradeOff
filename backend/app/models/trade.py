@@ -1,10 +1,12 @@
 """Trade model for executed trades between maker and taker."""
-from decimal import Decimal
 import uuid
 from datetime import datetime
-from sqlalchemy import Integer, String, ForeignKey, Numeric, DateTime
+from decimal import Decimal
+
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base, UUIDMixin
 
 

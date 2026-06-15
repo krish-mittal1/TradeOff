@@ -1,7 +1,8 @@
 """Exchange and user analytics APIs."""
 import uuid
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user_id

@@ -25,7 +25,7 @@ async def create_notification(
     )
     db.add(notification)
     await db.flush()
-    
+
     # Trigger Celery notification delivery task asynchronously
     from app.tasks.jobs import send_notification
     send_notification.delay(str(notification.id))

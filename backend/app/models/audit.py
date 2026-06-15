@@ -1,9 +1,11 @@
 """Audit log model for immutable event tracking."""
 import uuid
 from datetime import datetime
-from sqlalchemy import BigInteger, String, ForeignKey, Text, DateTime
-from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
+
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base
 
 

@@ -1,7 +1,7 @@
 """Wallet, deposit, withdrawal, and mock-chain API endpoints."""
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -13,7 +13,7 @@ from app.config import settings
 from app.db.session import get_db
 from app.models.asset import Asset
 from app.models.operations import MockChainTransaction
-from app.models.wallet import Deposit, Withdrawal, UserWallet
+from app.models.wallet import Deposit, UserWallet, Withdrawal
 from app.services.notification_service import create_notification
 from app.services.outbox_service import add_outbox_event
 from app.services.wallet_service import add_ledger, get_wallet_for_update

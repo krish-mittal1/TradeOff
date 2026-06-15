@@ -1,6 +1,6 @@
 """Demo bootstrap endpoints for a fully interactive portfolio deployment."""
-from decimal import Decimal
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, update
@@ -13,9 +13,9 @@ from app.models.asset import Asset, TradingPair
 from app.models.order import Order
 from app.models.user import User
 from app.models.wallet import UserWallet
-from app.services.wallet_service import reserve_order_funds
-from app.services.market_data_service import SUPPORTED_MARKETS, market_data_service
 from app.services.copy_trading_service import floor_to_step
+from app.services.market_data_service import SUPPORTED_MARKETS, market_data_service
+from app.services.wallet_service import reserve_order_funds
 from app.utils.security import hash_password
 
 router = APIRouter()

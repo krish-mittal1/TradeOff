@@ -1,8 +1,8 @@
 """Operational models: outbox, reconciliation, and mock blockchain events."""
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 

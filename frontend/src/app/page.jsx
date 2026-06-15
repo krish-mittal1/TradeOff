@@ -729,6 +729,7 @@ export default function Home() {
   const [depth, setDepth] = useState({ bids: [], asks: [] })
   const [tradesList, setTradesList] = useState([])
   const [localOrders, setLocalOrders] = useState([])
+  const [mobileTab, setMobileTab] = useState('orderbook')
 
   // Virtual balances persisted to localStorage
   const [virtualBalances, setVirtualBalances] = useState(() => {
@@ -977,10 +978,31 @@ export default function Home() {
         <SideRail />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden p-1.5 gap-1.5">
+
+          {/* Mobile: horizontal coin selector (hidden on xl+) */}
+          <div className="xl:hidden flex overflow-x-auto gap-1 pb-0.5 shrink-0" style={{ scrollbarWidth: 'none' }}>
+            {markets.map((m) => (
+              <button
+                key={m.symbol}
+                onClick={() => setSelected(m)}
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                  selected.symbol === m.symbol
+                    ? 'border-amber-400/30 bg-amber-400/10 text-amber-400'
+                    : 'border-white/5 bg-white/[0.025] text-slate-400 hover:bg-white/[0.05]'
+                }`}
+              >
+                <span>{m.base}</span>
+                <span className={`font-mono ${m.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {m.change >= 0 ? '+' : ''}{Number(m.change).toFixed(1)}%
+                </span>
+              </button>
+            ))}
+          </div>
+
           {/* Top row: Market Selector | Ticker+Chart | Order Book */}
           <div className="grid min-h-0 flex-1 gap-1.5 xl:grid-cols-[220px_minmax(0,1fr)_260px]">
 
-            {/* Left: Market Selector */}
+            {/* Left: Market Selector — desktop only */}
             <div className="hidden xl:flex xl:flex-col min-h-0">
               <MarketSelector markets={markets} selected={market} onSelect={setSelected} />
             </div>
@@ -993,7 +1015,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right: Order Book */}
+            {/* Right: Order Book — desktop only */}
             <div className="hidden xl:flex xl:flex-col min-h-0">
               <OrderBook market={market} depth={depth} livePrice={livePrice} />
             </div>
@@ -1021,10 +1043,38 @@ export default function Home() {
                 localOrders={user ? [] : localOrders}
               />
             </div>
+            {/* Recent Trades — desktop only */}
             <div className="hidden xl:flex xl:flex-col min-h-0">
               <RecentTrades market={market} tradesList={tradesList} livePrice={livePrice} />
             </div>
           </div>
+
+          {/* Mobile: Order Book / Recent Trades tab switcher */}
+          <div className="xl:hidden shrink-0">
+            <div className="mb-1.5 flex rounded-xl border border-white/5 overflow-hidden text-xs">
+              {[['orderbook', 'Order Book'], ['trades', 'Market Trades']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setMobileTab(key)}
+                  className={`flex-1 py-2.5 font-medium transition ${
+                    mobileTab === key
+                      ? 'bg-amber-400/10 text-amber-400'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.025]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div style={{ height: 320 }}>
+              {mobileTab === 'orderbook' ? (
+                <OrderBook market={market} depth={depth} livePrice={livePrice} />
+              ) : (
+                <RecentTrades market={market} tradesList={tradesList} livePrice={livePrice} />
+              )}
+            </div>
+          </div>
+
         </main>
       </div>
 

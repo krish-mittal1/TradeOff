@@ -3,13 +3,13 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user
 from app.db.session import get_db
 from app.models.asset import TradingPair
-from app.models.extra import UserFavorite, Watchlist, WatchlistItem
+from app.models.extra import UserFavorite
 from app.models.referral import Referral
 from app.models.user import ApiKey, User
 from app.utils.security import generate_api_key
