@@ -3,6 +3,8 @@
 Maintains bid and ask sides as sorted dictionaries for O(log N) operations.
 Each price level has a FIFO queue for time priority.
 """
+from __future__ import annotations
+
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field

@@ -3,6 +3,8 @@
 Supports market, limit, stop-market, stop-limit, and iceberg orders
 with partial fills, full fills, and FIFO ordering.
 """
+from __future__ import annotations
+
 import asyncio
 import uuid
 from dataclasses import dataclass, field

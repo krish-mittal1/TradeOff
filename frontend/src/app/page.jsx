@@ -83,13 +83,36 @@ function useLivePriceTick(basePrice, symbol, interval = 2500) {
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
-function Header({ onAuthOpen }) {
+function Header({ onAuthOpen, markets = [], onSelectMarket }) {
   const { user, logout } = useAuth()
   const themeCtx = useTheme()
   const theme = themeCtx?.theme ?? 'dark'
   const toggleTheme = themeCtx?.toggleTheme ?? (() => {})
   const websocket = useWebSocket()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef(null)
+
+  const searchResults = searchQuery.length > 0
+    ? markets.filter((m) =>
+        m.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.base?.toLowerCase().includes(searchQuery.toLowerCase())
+      ).slice(0, 6)
+    : []
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        setSearchOpen(true)
+      }
+      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery('') }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   const navItems = [
     ['Markets', '/market'],
     ['Trade', '/'],
@@ -121,10 +144,44 @@ function Header({ onAuthOpen }) {
           ))}
         </nav>
 
-        <div className="ml-auto hidden w-full max-w-[280px] items-center gap-2 rounded-xl border border-white/5 bg-white/[0.035] px-3 py-2 text-sm text-slate-500 lg:flex">
-          <Search size={15} />
-          <span className="text-xs">Search markets</span>
-          <kbd className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[10px]">/</kbd>
+        <div className="relative ml-auto hidden w-full max-w-[280px] lg:block">
+          <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.035] px-3 py-2 focus-within:border-amber-400/30 transition">
+            <Search size={15} className="shrink-0 text-slate-500" />
+            <input
+              ref={searchRef}
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true) }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              placeholder="Search markets"
+              className="w-full border-0 bg-transparent p-0 text-xs text-slate-200 placeholder:text-slate-500 focus:ring-0"
+            />
+            {searchQuery
+              ? <button onMouseDown={() => { setSearchQuery(''); setSearchOpen(false) }}><X size={13} className="text-slate-600 hover:text-slate-300" /></button>
+              : <kbd className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600">/</kbd>}
+          </div>
+          {searchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full z-50 mt-1 w-full overflow-hidden rounded-xl border border-white/10 bg-[#10141d] shadow-2xl">
+              {searchResults.map((m) => (
+                <button
+                  key={m.symbol}
+                  onMouseDown={() => { onSelectMarket?.(m); setSearchQuery(''); setSearchOpen(false) }}
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-sm transition hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium text-white">{m.base}</span>
+                    <span className="text-slate-500">/USDT</span>
+                  </span>
+                  <div className="text-right">
+                    <div className="font-mono text-xs text-slate-300">{formatPrice(m.price)}</div>
+                    <div className={`font-mono text-[10px] ${m.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {m.change >= 0 ? '+' : ''}{Number(m.change).toFixed(2)}%
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
@@ -313,9 +370,11 @@ function TickerStrip({ market, livePrice }) {
 }
 
 // ─── Price Chart (wrapper for CandlestickChart) ───────────────────────────────
-function PriceChart({ market, candles }) {
-  const [tab, setTab] = useState('1m')
-  const tabs = ['1m', '5m', '15m', '1H', '4H', '1D']
+const TAB_INTERVALS = { '1m': '1m', '5m': '5m', '15m': '15m', '1H': '1h', '4H': '4h', '1D': '1d' }
+
+function PriceChart({ market, candles, interval = '1m', onIntervalChange }) {
+  const tabs = Object.keys(TAB_INTERVALS)
+  const activeTab = Object.entries(TAB_INTERVALS).find(([, v]) => v === interval)?.[0] ?? '1m'
   return (
     <section className="panel price-chart flex flex-col overflow-hidden h-full">
       <div className="panel-title shrink-0">
@@ -324,11 +383,10 @@ function PriceChart({ market, candles }) {
           {tabs.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => onIntervalChange?.(TAB_INTERVALS[t])}
               className={`text-[10px] transition ${
-                t === tab ? 'text-amber-400 font-semibold' : 'text-slate-600 hover:text-slate-400'
-              } ${t !== '1m' ? 'cursor-not-allowed opacity-40' : ''}`}
-              disabled={t !== '1m'}
+                t === activeTab ? 'text-amber-400 font-semibold' : 'text-slate-600 hover:text-slate-400'
+              }`}
             >
               {t}
             </button>
@@ -730,6 +788,7 @@ export default function Home() {
   const [tradesList, setTradesList] = useState([])
   const [localOrders, setLocalOrders] = useState([])
   const [mobileTab, setMobileTab] = useState('orderbook')
+  const [chartInterval, setChartInterval] = useState('1m')
 
   // Virtual balances persisted to localStorage
   const [virtualBalances, setVirtualBalances] = useState(() => {
@@ -849,7 +908,7 @@ export default function Home() {
       try {
         const sym = selected.symbol
         const [c, d, t] = await Promise.all([
-          tradingService.getCandles(sym, '1m').catch(() => []),
+          tradingService.getCandles(sym, chartInterval).catch(() => []),
           tradingService.getDepth(sym, 50).catch(() => ({ bids: [], asks: [] })),
           tradingService.getRecentTrades(sym, 50).catch(() => []),
         ])
@@ -871,7 +930,7 @@ export default function Home() {
     loadData()
     const iv = setInterval(() => { if (active) loadData() }, 20000)
     return () => { active = false; clearInterval(iv) }
-  }, [selected.symbol])
+  }, [selected.symbol, chartInterval])
 
   // WebSocket: live tickers
   useEffect(() => {
@@ -972,9 +1031,9 @@ export default function Home() {
         position="bottom-right"
         toastOptions={{ style: { background: '#171c26', color: '#e2e8f0', border: '1px solid rgba(255,255,255,.08)' } }}
       />
-      <Header onAuthOpen={() => setAuthOpen(true)} />
+      <Header onAuthOpen={() => setAuthOpen(true)} markets={markets} onSelectMarket={setSelected} />
 
-      <div className="flex overflow-hidden" style={{ height: `calc(100vh - ${HEADER_H}px)` }}>
+      <div className="flex overflow-hidden" style={{ height: `calc(100dvh - ${HEADER_H}px)` }}>
         <SideRail />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden p-1.5 gap-1.5">
@@ -1011,7 +1070,7 @@ export default function Home() {
             <div className="flex min-w-0 flex-col gap-1.5 min-h-0">
               <TickerStrip market={market} livePrice={livePrice} />
               <div className="flex-1 min-h-0">
-                <PriceChart market={market} candles={candles} />
+                <PriceChart market={market} candles={candles} interval={chartInterval} onIntervalChange={setChartInterval} />
               </div>
             </div>
 
