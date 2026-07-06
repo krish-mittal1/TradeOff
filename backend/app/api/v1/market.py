@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
+
+logger = logging.getLogger(__name__)
 from app.models.asset import TradingPair
 from app.models.market import Candle
 from app.models.trade import Trade
@@ -181,11 +184,13 @@ async def get_all_tickers(db: AsyncSession = Depends(get_db)):
                 "change_pct_24h": str(live_tick.change_pct_24h) if live_tick else "0",
             })
         except Exception:
+            logger.exception("Failed to build ticker for %s", pair.symbol)
             tickers.append({
                 "symbol": pair.symbol,
                 "price": "0",
                 "best_bid": "0",
                 "best_ask": "0",
+                "change_pct_24h": "0",
             })
 
     return tickers

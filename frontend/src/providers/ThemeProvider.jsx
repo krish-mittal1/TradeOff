@@ -12,13 +12,10 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState('dark')
 
   useEffect(() => {
-    const stored = localStorage.getItem('theme')
-    if (stored) {
-      setTheme(stored)
-      document.documentElement.classList.toggle('dark', stored === 'dark')
-    } else {
-      document.documentElement.classList.add('dark')
-    }
+    const stored = localStorage.getItem('theme') || 'dark'
+    setTheme(stored)
+    document.documentElement.classList.toggle('dark', stored === 'dark')
+    document.documentElement.style.colorScheme = stored
   }, [])
 
   const toggleTheme = () => {
@@ -26,6 +23,7 @@ export function ThemeProvider({ children }) {
     setTheme(next)
     localStorage.setItem('theme', next)
     document.documentElement.classList.toggle('dark', next === 'dark')
+    document.documentElement.style.colorScheme = next
   }
 
   return (

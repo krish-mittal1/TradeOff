@@ -1,15 +1,16 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws'
 
 class ApiClient {
   constructor() {
     this.baseUrl = API_BASE
+    // Singleton refresh promise — prevents concurrent token rotations when
+    // multiple requests get a 401 at the same time.
+    this._refreshPromise = null
   }
 
   getHeaders() {
     const headers = {
       'Content-Type': 'application/json',
-      'X-Request-ID': crypto.randomUUID?.() || Math.random().toString(36).slice(2),
     }
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
     if (token) {
@@ -20,56 +21,60 @@ class ApiClient {
 
   async request(method, path, body = null, params = null) {
     let url = `${this.baseUrl}${path}`
+
     if (params) {
       const searchParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
-          searchParams.append(key, value)
+          searchParams.append(key, String(value))
         }
       })
       const qs = searchParams.toString()
       if (qs) url += `?${qs}`
     }
 
-    const options = {
+    const buildOptions = () => ({
       method,
       headers: this.getHeaders(),
-    }
-    if (body) {
-      options.body = JSON.stringify(body)
-    }
+      ...(body != null ? { body: JSON.stringify(body) } : {}),
+    })
 
     try {
-      const response = await fetch(url, options)
-      
+      const response = await fetch(url, buildOptions())
+
       if (response.status === 401) {
-        // Try refresh
-        const refreshed = await this.refreshToken()
-        if (refreshed) {
-          options.headers = this.getHeaders()
-          const retryResponse = await fetch(url, options)
-          return this.handleResponse(retryResponse)
+        // Coalesce concurrent 401s into one refresh attempt
+        if (!this._refreshPromise) {
+          this._refreshPromise = this._doRefresh().finally(() => {
+            this._refreshPromise = null
+          })
         }
-        throw new ApiError('Unauthorized', 401)
+        const refreshed = await this._refreshPromise
+        if (refreshed) {
+          // Retry with the new token
+          const retryResponse = await fetch(url, buildOptions())
+          return this._handleResponse(retryResponse)
+        }
+        throw new ApiError('Session expired. Please log in again.', 401)
       }
 
-      return this.handleResponse(response)
+      return this._handleResponse(response)
     } catch (error) {
       if (error instanceof ApiError) throw error
-      throw new ApiError(error.message, 0)
+      throw new ApiError(error.message || 'Network error', 0)
     }
   }
 
-  async handleResponse(response) {
+  async _handleResponse(response) {
     const contentType = response.headers.get('content-type') || ''
     const data = contentType.includes('application/json') ? await response.json() : null
     if (!response.ok) {
-      throw new ApiError(data?.detail || data?.message || 'Request failed', response.status)
+      throw new ApiError(data?.detail || data?.message || `Request failed (${response.status})`, response.status)
     }
     return data
   }
 
-  async refreshToken() {
+  async _doRefresh() {
     if (typeof window === 'undefined') return false
     const refreshToken = localStorage.getItem('refresh_token')
     if (!refreshToken) return false
@@ -82,6 +87,7 @@ class ApiClient {
       })
 
       if (!response.ok) {
+        // Refresh failed — clear tokens so the UI shows the login prompt
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         return false

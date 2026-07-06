@@ -53,8 +53,7 @@ export default function MarketPage() {
     queryKey: ['market-tickers-all'],
     queryFn: async () => {
       try {
-        const { apiClient } = await import('@/services/api')
-        return apiClient.get('/market/tickers')
+        return await tradingService.getTickers()
       } catch {
         return []
       }
@@ -106,7 +105,7 @@ export default function MarketPage() {
   }
 
   return (
-    <ProductShell title="Markets" subtitle="All active trading pairs with live prices and 24h stats.">
+    <ProductShell title="Markets" subtitle="Browse all available trading pairs. Click 'Trade' on any coin to start practicing.">
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         <StatCard label="Active pairs" value={pairs.length} detail="Listed on this exchange" />
         <StatCard
@@ -178,7 +177,7 @@ export default function MarketPage() {
                 </span>
                 <span className="text-right">
                   <Link
-                    href="/"
+                    href={`/?symbol=${pair.symbol}`}
                     className="inline-block rounded-lg bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/20"
                   >
                     Trade

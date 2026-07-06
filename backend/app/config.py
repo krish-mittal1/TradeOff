@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # Security
     BCRYPT_ROUNDS: int = 12
-    CORS_ORIGINS: str = '["http://localhost:3000"]'
+    CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:8080","http://localhost:3002"]'
     RATE_LIMIT_REQUESTS: int = 10000
     RATE_LIMIT_WINDOW: int = 60
     RATE_LIMIT_AUTH_REQUESTS: int = 10000
@@ -76,10 +76,16 @@ class Settings(BaseSettings):
     DEFAULT_MAKER_FEE: float = 0.001
     DEFAULT_TAKER_FEE: float = 0.001
 
-    # AI
-    OPENAI_API_KEY: str | None = None
-    AI_MODEL: str = "gpt-4"
-    AI_MAX_TOKENS: int = 2000
+    # Blockchain
+    BLOCKCHAIN_NETWORK: str = "sepolia"
+    SEPOLIA_RPC_URL: str = ""
+    DEPLOYER_PRIVATE_KEY: str = ""
+
+    # AI (OpenRouter)
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    AI_MODEL: str = "deepseek/deepseek-chat-v3-0324:free"
+    AI_MAX_TOKENS: int = 1024
 
     # Monitoring
     SENTRY_DSN: str | None = None
@@ -105,3 +111,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if settings.ENVIRONMENT != "development" and "dev-jwt-secret" in settings.JWT_SECRET:
+    raise RuntimeError("JWT_SECRET must be set to a secure value in production (set JWT_SECRET env var)")

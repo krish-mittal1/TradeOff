@@ -55,7 +55,7 @@ def calculate_copy_quantity(
         quantity = min(quantity, max_position_size / leader_price)
     quantity = min(quantity, max_qty)
     quantity = floor_to_step(quantity, step_size)
-    if quantity < min_qty:
+    if quantity <= 0 or quantity < min_qty:
         return None
     if quantity * leader_price < min_notional:
         return None

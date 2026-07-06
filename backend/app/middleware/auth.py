@@ -24,11 +24,13 @@ PUBLIC_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/register",
     "/api/v1/auth/refresh",
+    "/api/v1/auth/logout",
     "/api/v1/market/pairs",
     "/api/v1/market/tickers",
     "/api/v1/market/ticker/",
     "/api/v1/market/candles",
     "/api/v1/market/trades/",
+    "/api/v1/market/depth/",
 }
 
 
@@ -47,7 +49,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Skip auth for public endpoints
-        if any(path.startswith(p) for p in PUBLIC_PATHS) or path.startswith("/api/v1/market/depth/"):
+        if any(path.startswith(p) for p in PUBLIC_PATHS):
             return await call_next(request)
 
         api_key = request.headers.get("X-API-KEY")

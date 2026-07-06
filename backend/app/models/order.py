@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,8 @@ class Order(UUIDMixin, TimestampMixin, Base):
     reject_reason: Mapped[str | None] = mapped_column(String(50))
     client_order_id: Mapped[str | None] = mapped_column(String(100))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Optimistic locking version counter — incremented on every status/fill update
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     user = relationship("User", back_populates="orders")
     trading_pair = relationship("TradingPair")
 

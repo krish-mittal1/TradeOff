@@ -1,4 +1,4 @@
-.PHONY: help dev-backend dev-frontend dev-docker dev-down dev-reset test test-unit test-load lint format migrate seed clean
+.PHONY: help dev-backend dev-frontend dev-docker dev-down dev-reset test test-unit test-load lint format migrate seed clean blockchain-compile blockchain-test blockchain-node blockchain-deploy
 
 help:
 	@echo "TradeOff - Development Commands"
@@ -15,6 +15,12 @@ help:
 	@echo "make test-load      - Run load tests"
 	@echo "make lint           - Run linters"
 	@echo "make format         - Format code"
+	@echo ""
+	@echo "Blockchain:"
+	@echo "make blockchain-compile - Compile Solidity contracts"
+	@echo "make blockchain-test    - Run Hardhat tests"
+	@echo "make blockchain-node    - Start local Hardhat node"
+	@echo "make blockchain-deploy  - Deploy contracts to local node"
 
 dev-docker:
 	docker compose up -d
@@ -56,3 +62,15 @@ lint:
 
 format:
 	cd backend && ruff format .
+
+blockchain-compile:
+	cd blockchain && npx hardhat compile
+
+blockchain-test:
+	cd blockchain && npx hardhat test
+
+blockchain-node:
+	cd blockchain && npx hardhat node
+
+blockchain-deploy:
+	cd blockchain && npx hardhat run scripts/deploy.js --network localhost

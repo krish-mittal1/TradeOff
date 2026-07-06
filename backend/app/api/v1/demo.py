@@ -1,9 +1,9 @@
 """Demo bootstrap endpoints for a fully interactive portfolio deployment."""
 import uuid
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user_id
@@ -46,9 +46,47 @@ USER_STARTER_BALANCES = {
     "USDT": Decimal("100000"),
 }
 
-LIQUIDITY_BALANCES = {"USDT": Decimal("1000000000")}
+LIQUIDITY_BALANCES = {"USDT": Decimal("100000000000")}
 for market in SUPPORTED_MARKETS:
-    LIQUIDITY_BALANCES[market["base"]] = Decimal("1000000")
+    LIQUIDITY_BALANCES[market["base"]] = Decimal("100000000")
+
+# Order-book depth seeded per pair so market orders fill realistically.
+# Each level adds LIQUIDITY_NOTIONAL_STEP * index of notional depth, giving a deep
+# two-sided book (~$150k per side) instead of the old ~$150.
+LIQUIDITY_LEVELS = 12
+LIQUIDITY_NOTIONAL_STEP = Decimal("2000")
+
+
+def build_liquidity_ladder(
+    symbol: str,
+    pair: TradingPair,
+    mid: Decimal,
+    tick_size: Decimal,
+    step_size: Decimal,
+) -> list[tuple[OrderSide, Decimal, Decimal, str]]:
+    """Build a deep two-sided liquidity ladder.
+
+    Returns a list of ``(side, price, quantity, client_order_id)`` tuples. Prices
+    widen ~0.05% per level (at least a few ticks) so both high- and low-priced
+    assets show a realistic spread, and quantities scale so each level holds
+    meaningful notional.
+    """
+    if mid <= 0:
+        mid = max(tick_size, Decimal("1"))
+    ladder: list[tuple[OrderSide, Decimal, Decimal, str]] = []
+    for index in range(1, LIQUIDITY_LEVELS + 1):
+        raw_offset = max(tick_size * Decimal(index * 5), mid * Decimal("0.0005") * Decimal(index))
+        # Snap the offset onto the tick grid for clean price levels.
+        ticks = (raw_offset / tick_size).to_integral_value(rounding=ROUND_HALF_UP)
+        offset = tick_size * ticks
+        bid_price = max(tick_size, mid - offset)
+        ask_price = mid + offset
+        quantity = floor_to_step((LIQUIDITY_NOTIONAL_STEP * Decimal(index)) / mid, step_size)
+        if quantity < pair.min_qty:
+            quantity = pair.min_qty
+        ladder.append((OrderSide.BUY, bid_price, quantity, f"demo-liq:{symbol}:bid:{index}"))
+        ladder.append((OrderSide.SELL, ask_price, quantity, f"demo-liq:{symbol}:ask:{index}"))
+    return ladder
 
 
 async def ensure_assets_and_pairs(db: AsyncSession) -> tuple[dict[str, Asset], dict[str, TradingPair]]:
@@ -124,24 +162,29 @@ async def ensure_wallet_balance(
     return wallet
 
 
-async def reset_wallet_balance(
+async def topup_liquidity_balance(
     db: AsyncSession,
     *,
     user_id: uuid.UUID,
     asset: Asset,
-    available: Decimal,
+    target_available: Decimal,
 ) -> UserWallet:
+    """Ensure the liquidity user has at least ``target_available`` available.
+
+    This only ever *raises* available and never touches ``locked``, so it is safe
+    to call while orders rest in the book — it can never wipe the reservation
+    backing a resting order (which would corrupt settlement).
+    """
     wallet = (
         await db.execute(
             select(UserWallet).where(UserWallet.user_id == user_id, UserWallet.asset_id == asset.id)
         )
     ).scalar_one_or_none()
     if not wallet:
-        wallet = UserWallet(user_id=user_id, asset_id=asset.id, available=available, locked=Decimal("0"))
+        wallet = UserWallet(user_id=user_id, asset_id=asset.id, available=target_available, locked=Decimal("0"))
         db.add(wallet)
-    else:
-        wallet.available = available
-        wallet.locked = Decimal("0")
+    elif wallet.available < target_available:
+        wallet.available = target_available
         wallet.version += 1
     await db.flush()
     return wallet
@@ -251,67 +294,38 @@ async def bootstrap_demo(
         await ensure_wallet_balance(db, user_id=user_id, asset=assets[symbol], starting_available=amount)
 
     liquidity_user = await ensure_liquidity_user(db)
-    await db.execute(
-        update(Order).where(
-            Order.user_id == liquidity_user.id,
-            Order.client_order_id.like("demo-liq:%"),
-            Order.status.in_(("PENDING", "OPEN", "PARTIALLY_FILLED")),
-        ).values(
-            status="CANCELLED",
-        )
-    )
-    await db.flush()
 
+    # Top up the liquidity desk's balance non-destructively. We never reset or
+    # zero `locked` here: doing so would invalidate the reservations backing
+    # orders already resting in the book and corrupt trade settlement.
     for symbol, amount in LIQUIDITY_BALANCES.items():
-        await reset_wallet_balance(
+        await topup_liquidity_balance(
             db,
             user_id=liquidity_user.id,
             asset=assets[symbol],
-            available=amount,
+            target_available=amount,
         )
 
     seeded_orders = 0
-    from app.api.v1 import trading
-
-    for symbol in pairs:
-        trading._engines.pop(symbol, None)
+    from app.api.v1.trading import get_engine
 
     for symbol, _, _, _, _, _, _, _, tick_size, step_size, mid in PAIR_SPECS:
         pair = pairs[symbol]
         live_tick = market_data_service.get_tick(symbol)
         mid = live_tick.price if live_tick else mid
-        base_quantity = floor_to_step(
-            max(pair.min_qty, pair.min_notional / mid if mid > 0 else pair.min_qty),
-            step_size,
-        )
-        if base_quantity < pair.min_qty:
-            base_quantity = pair.min_qty
-        for index in range(1, 6):
-            bid_price = max(tick_size, mid - (tick_size * Decimal(index * 25)))
-            ask_price = mid + (tick_size * Decimal(index * 25))
-            quantity = floor_to_step(base_quantity * Decimal(index), step_size)
+        for side, price, quantity, client_order_id in build_liquidity_ladder(
+            symbol, pair, mid, tick_size, step_size
+        ):
             if await ensure_liquidity_order(
                 db,
                 liquidity_user=liquidity_user,
                 pair=pair,
-                side=OrderSide.BUY,
-                price=bid_price,
+                side=side,
+                price=price,
                 quantity=quantity,
-                client_order_id=f"demo-liq:{symbol}:bid:{index}",
+                client_order_id=client_order_id,
             ):
                 seeded_orders += 1
-            if await ensure_liquidity_order(
-                db,
-                liquidity_user=liquidity_user,
-                pair=pair,
-                side=OrderSide.SELL,
-                price=ask_price,
-                quantity=quantity,
-                client_order_id=f"demo-liq:{symbol}:ask:{index}",
-            ):
-                seeded_orders += 1
-        from app.api.v1.trading import get_engine
-
         get_engine(symbol).order_book.last_trade_price = mid
 
     await db.commit()

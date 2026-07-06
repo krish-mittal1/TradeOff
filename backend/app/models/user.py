@@ -23,6 +23,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     mfa_secret: Mapped[str | None] = mapped_column(String(64))
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eth_wallet: Mapped[str | None] = mapped_column(String(42))
 
     # Relationships
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")

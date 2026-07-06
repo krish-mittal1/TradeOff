@@ -288,6 +288,11 @@ async def place_market_order(
     reference_price = engine.best_ask if side == OrderSide.BUY else engine.best_bid
     if not reference_price:
         raise HTTPException(status_code=409, detail="No market liquidity")
+
+    # A quote-funded market buy ("spend $X") must let the engine fill against its
+    # quote budget, not a fixed base quantity derived from the best ask. Otherwise
+    # walking up the book costs more than the reserved funds.
+    is_quote_buy = side == OrderSide.BUY and req.quote_quantity > 0
     quantity = req.quantity if req.quantity > 0 else req.quote_quantity / reference_price
     await enforce_pre_trade_limits(
         db, user_id=user_id, quantity=quantity, notional=quantity * reference_price
@@ -300,14 +305,33 @@ async def place_market_order(
     )
     order = EngineOrder(
         order_id=order_id, user_id=user_id, trading_pair=pair.symbol, side=side,
-        order_type=OrderType.MARKET, quantity=quantity, quote_quantity=req.quote_quantity or None,
+        order_type=OrderType.MARKET,
+        quantity=Decimal("0") if is_quote_buy else quantity,
+        quote_quantity=req.quote_quantity or None,
     )
     result = await engine.process_order(order)
+    if is_quote_buy:
+        # The engine fills against the quote budget, but EngineOrder.fill() caps
+        # filled_quantity at `quantity` (0 here), so derive the executed base from
+        # the trades and record it as the order size for a clean response + DB row.
+        executed_base = sum((trade.quantity for trade in result.trades), Decimal("0"))
+        order.filled_quantity = executed_base
+        order.quantity = executed_base
     await persist_result(db, pair, order, result, order_type="MARKET", client_order_id=req.client_order_id)
-    await release_order_funds(
-        db, user_id=user_id, pair=pair, side=side.value, remaining_quantity=order.remaining_quantity,
-        price=reference_price, remaining_quote=None, order_id=order_id, fee_rate=pair.taker_fee,
-    )
+
+    if is_quote_buy:
+        spent_quote = sum((trade.quote_quantity for trade in result.trades), Decimal("0"))
+        unspent_quote = req.quote_quantity - spent_quote
+        await release_order_funds(
+            db, user_id=user_id, pair=pair, side=side.value, remaining_quantity=Decimal("0"),
+            price=reference_price, remaining_quote=unspent_quote if unspent_quote > 0 else Decimal("0"),
+            order_id=order_id, fee_rate=pair.taker_fee,
+        )
+    else:
+        await release_order_funds(
+            db, user_id=user_id, pair=pair, side=side.value, remaining_quantity=order.remaining_quantity,
+            price=reference_price, remaining_quote=None, order_id=order_id, fee_rate=pair.taker_fee,
+        )
     await process_triggered_stop_orders(db, engine, pair)
     return response_for(order, result)
 

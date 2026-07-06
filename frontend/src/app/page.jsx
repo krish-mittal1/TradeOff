@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity, ArrowDown, ArrowUp, BarChart3, Bell, BookOpen, ChevronDown,
-  CircleDollarSign, LayoutDashboard, LogOut, Menu, Moon, Search, Settings,
-  ShieldCheck, Star, Sun, Wallet, X,
+  Activity, ArrowDown, ArrowUp, BarChart3, Bell, Bitcoin, BookOpen, ChevronDown,
+  Blocks, CircleDollarSign, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Menu, Moon,
+  Search, Settings, ShieldCheck, Star, Sun, TrendingUp, Wallet, X,
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { tradingService } from '@/services/tradingService'
@@ -33,7 +34,7 @@ function seedTrades(mid, symbol) {
     price: mid + ((i % 5) - 2) * mid * 0.0002,
     amount: ((i * 13) % 47 + 2) / (mid > 1000 ? 1000 : mid > 10 ? 10 : 1),
     side: i % 3 === 0 ? 'sell' : 'buy',
-    time: `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes() - Math.floor(i / 2)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}`,
+    time: new Date(Date.now() - i * 30000).toLocaleTimeString([], { hour12: false }),
   }))
 }
 
@@ -59,31 +60,35 @@ function floorToStep(value, stepSize = '0.000001') {
 }
 
 // ─── Simulate live price ticks ─────────────────────────────────────────────────
-function useLivePriceTick(basePrice, symbol, interval = 2500) {
+function useLivePriceTick(basePrice, symbol) {
   const [price, setPrice] = useState(basePrice)
-  const stateRef = useRef({ price: basePrice, symbol })
+  const stateRef = useRef({ price: basePrice, symbol, base: basePrice })
 
-  // Reset immediately when pair changes
+  // Reset when pair changes
   useEffect(() => {
-    stateRef.current = { price: basePrice, symbol }
+    stateRef.current = { price: basePrice, symbol, base: basePrice }
     setPrice(basePrice)
   }, [basePrice, symbol])
 
   useEffect(() => {
+    // 600ms tick — lively Binance-like updates, volatility high enough to be visible
     const id = setInterval(() => {
-      const volatility = stateRef.current.price * 0.0006
-      const change = (Math.random() - 0.5) * volatility
-      stateRef.current.price = Math.max(stateRef.current.price * 0.95, stateRef.current.price + change)
-      setPrice(stateRef.current.price)
-    }, interval)
+      const s = stateRef.current
+      const vol = s.base * 0.0008 // 0.08% per tick → visible change on BTC (~$55)
+      const change = (Math.random() - 0.5) * 2 * vol
+      // Gentle mean-revert so price stays within ~5% of real market price
+      const meanRevert = (s.base - s.price) * 0.05
+      s.price = Math.max(s.base * 0.90, s.price + change + meanRevert)
+      setPrice(s.price)
+    }, 600)
     return () => clearInterval(id)
-  }, [symbol, interval]) // restart tick simulation on coin switch
+  }, [symbol])
 
   return price
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
-function Header({ onAuthOpen, markets = [], onSelectMarket }) {
+function Header({ onAuthOpen, onHelpOpen, markets = [], onSelectMarket }) {
   const { user, logout } = useAuth()
   const themeCtx = useTheme()
   const theme = themeCtx?.theme ?? 'dark'
@@ -126,10 +131,10 @@ function Header({ onAuthOpen, markets = [], onSelectMarket }) {
     <header className="exchange-header sticky top-0 z-50 border-b border-white/5 bg-[#090c12]/95 backdrop-blur-xl">
       <div className="flex h-14 items-center gap-6 px-4 lg:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 text-[#0b0e14] shadow-lg shadow-amber-500/20">
+          <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 text-[#0b0e14] shadow-lg shadow-amber-500/25 ring-1 ring-amber-400/20">
             <BarChart3 size={18} strokeWidth={2.8} />
           </div>
-          <span className="text-lg font-bold tracking-tight text-white">TradeOff</span>
+          <span className="text-lg font-bold tracking-tight text-white">Trade<span className="text-amber-400">Off</span></span>
         </div>
 
         <nav className="hidden items-center gap-0.5 text-sm text-slate-400 md:flex">
@@ -192,8 +197,18 @@ function Header({ onAuthOpen, markets = [], onSelectMarket }) {
                 : 'border-white/10 bg-white/[0.035] text-slate-500'
             }`}
           >
-            {websocket?.connected ? '● Live' : '○ Offline'}
+            {websocket?.connected ? <><span className="animate-pulse-glow">●</span> Live</> : '○ Offline'}
           </span>
+          <button
+            onClick={onHelpOpen}
+            className="hidden items-center gap-1.5 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-400/20 transition sm:flex"
+            aria-label="How it works"
+          >
+            <HelpCircle size={14} /> How it works
+          </button>
+          <button onClick={onHelpOpen} className="icon-button sm:hidden" aria-label="How it works">
+            <HelpCircle size={16} />
+          </button>
           <button onClick={toggleTheme} className="icon-button" aria-label="Toggle theme">
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
@@ -214,7 +229,7 @@ function Header({ onAuthOpen, markets = [], onSelectMarket }) {
               </button>
               <button
                 onClick={onAuthOpen}
-                className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-[#0b0e14] hover:bg-amber-300 transition"
+                className="rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 px-3.5 py-1.5 text-xs font-semibold text-[#0b0e14] shadow-md shadow-amber-500/20 transition-all duration-200 hover:from-amber-300 hover:to-amber-400 hover:shadow-lg hover:shadow-amber-500/30 active:scale-95"
               >
                 Get started
               </button>
@@ -256,23 +271,24 @@ function SideRail() {
     [Activity, '/', 'Trade'],
     [BookOpen, '/market', 'Markets'],
     [Wallet, '/wallets', 'Wallets'],
+    [Blocks, '/blockchain', 'Blockchain'],
     [CircleDollarSign, '/copy-trading', 'Copy'],
   ]
   return (
-    <aside className="hidden w-12 shrink-0 flex-col items-center gap-2 border-r border-white/5 bg-[#090c12] py-3 lg:flex">
+    <aside className="hidden w-12 shrink-0 flex-col items-center gap-1.5 border-r border-white/[0.06] bg-[#080b11] py-3 lg:flex">
       {items.map(([Icon, href, label], i) => (
         <Link
           href={href}
           key={href + i}
           title={label}
-          className={`grid h-9 w-9 place-items-center rounded-lg transition ${
-            i === 1 ? 'bg-amber-400/10 text-amber-400' : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
+          className={`grid h-9 w-9 place-items-center rounded-lg transition-all duration-200 ${
+            i === 1 ? 'bg-amber-400/10 text-amber-400 shadow-sm shadow-amber-400/10' : 'text-slate-600 hover:bg-white/[0.06] hover:text-slate-300'
           }`}
         >
           <Icon size={17} />
         </Link>
       ))}
-      <Link href="/profile" title="Settings" className="mt-auto grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-white/5 hover:text-slate-200">
+      <Link href="/profile" title="Settings" className="mt-auto grid h-9 w-9 place-items-center rounded-lg text-slate-600 transition-all duration-200 hover:bg-white/[0.06] hover:text-slate-300">
         <Settings size={17} />
       </Link>
     </aside>
@@ -307,8 +323,8 @@ function MarketSelector({ markets, selected, onSelect }) {
           <button
             key={m.symbol}
             onClick={() => onSelect(m)}
-            className={`grid w-full grid-cols-[1fr_1fr_0.7fr] items-center px-2.5 py-1.5 text-[11px] transition hover:bg-white/[0.035] ${
-              selected.symbol === m.symbol ? 'bg-white/[0.06]' : ''
+            className={`grid w-full grid-cols-[1fr_1fr_0.7fr] items-center px-2.5 py-1.5 text-[11px] transition-colors duration-150 hover:bg-white/[0.04] ${
+              selected.symbol === m.symbol ? 'bg-amber-400/[0.06] border-l-2 border-l-amber-400' : 'border-l-2 border-l-transparent'
             }`}
           >
             <span className="flex items-center gap-1.5 text-left font-medium text-slate-200">
@@ -332,37 +348,51 @@ function MarketSelector({ markets, selected, onSelect }) {
 // ─── Ticker Strip ─────────────────────────────────────────────────────────────
 function TickerStrip({ market, livePrice }) {
   const displayPrice = livePrice || market.price
-  const isUp = market.change >= 0
-  // Derive 24h high/low from live price (more realistic)
+  const prevPriceRef = useRef(displayPrice)
+  const [tickUp, setTickUp] = useState(true)
+  const isChange24Up = market.change >= 0
   const high24h = market.high || displayPrice * 1.032
   const low24h = market.low || displayPrice * 0.958
 
+  // Track tick direction for color flash
+  useEffect(() => {
+    if (!livePrice) return
+    setTickUp(livePrice >= prevPriceRef.current)
+    prevPriceRef.current = livePrice
+  }, [livePrice])
+
   return (
-    <section className="panel ticker-strip flex min-h-[76px] shrink-0 items-center gap-5 overflow-x-auto px-4 py-2.5">
+    <section className="panel ticker-strip flex min-h-[76px] shrink-0 items-center gap-6 overflow-x-auto px-4 py-2.5">
       <div className="min-w-fit">
-        <div className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-400/10 text-[10px] text-amber-400">
+        <div className="flex items-center gap-2.5 text-sm font-semibold text-white">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-amber-400/20 to-amber-400/5 text-[11px] font-bold text-amber-400">
             {market.base?.[0]}
           </span>
-          {market.base}/USDT <ChevronDown size={13} className="text-slate-600" />
+          <span>{market.base}<span className="text-slate-500">/USDT</span></span>
+          <ChevronDown size={13} className="text-slate-600" />
         </div>
-        <div className="mt-0.5 text-[10px] text-slate-600">Spot market</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Live
+        </div>
       </div>
-      <div className="min-w-fit">
-        <div className={`font-mono text-lg font-bold tabular-nums transition-colors ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+      <div className="min-w-fit border-l border-white/[0.06] pl-5">
+        <div className={`font-mono text-xl font-bold tabular-nums tracking-tight transition-colors duration-200 ${tickUp ? 'text-emerald-400' : 'text-rose-400'}`}>
           {formatPrice(displayPrice)}
         </div>
-        <div className="text-[10px] text-slate-600">${formatPrice(displayPrice)}</div>
+        <div className={`text-[10px] ${isChange24Up ? 'text-emerald-500/60' : 'text-rose-500/60'}`}>
+          {isChange24Up ? '▲' : '▼'} {Math.abs(Number(market.change)).toFixed(2)}% today
+        </div>
       </div>
       {[
-        ['24h Change', `${market.change >= 0 ? '+' : ''}${Number(market.change).toFixed(2)}%`, isUp ? 'text-emerald-400' : 'text-rose-400'],
+        ['24h Change', `${isChange24Up ? '+' : ''}${Number(market.change).toFixed(2)}%`, isChange24Up ? 'text-emerald-400' : 'text-rose-400'],
         ['24h High', formatPrice(high24h), 'text-slate-300'],
         ['24h Low', formatPrice(low24h), 'text-slate-300'],
-        [`24h Volume (${market.base})`, market.volume, 'text-slate-300'],
+        [`24h Vol (${market.base})`, market.volume, 'text-slate-300'],
       ].map(([label, value, color]) => (
         <div key={label} className="min-w-fit">
-          <div className="text-[10px] text-slate-600">{label}</div>
-          <div className={`mt-0.5 font-mono text-[11px] ${color}`}>{value}</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-600">{label}</div>
+          <div className={`mt-0.5 font-mono text-[12px] tabular-nums ${color}`}>{value}</div>
         </div>
       ))}
     </section>
@@ -372,11 +402,12 @@ function TickerStrip({ market, livePrice }) {
 // ─── Price Chart (wrapper for CandlestickChart) ───────────────────────────────
 const TAB_INTERVALS = { '1m': '1m', '5m': '5m', '15m': '15m', '1H': '1h', '4H': '4h', '1D': '1d' }
 
-function PriceChart({ market, candles, interval = '1m', onIntervalChange }) {
+function PriceChart({ market, candles, interval = '1m', onIntervalChange, livePrice }) {
+  const [chartType, setChartType] = useState('candle')
   const tabs = Object.keys(TAB_INTERVALS)
   const activeTab = Object.entries(TAB_INTERVALS).find(([, v]) => v === interval)?.[0] ?? '1m'
   return (
-    <section className="panel price-chart flex flex-col overflow-hidden h-full">
+    <section className="panel price-chart flex flex-col overflow-hidden" style={{ height: '100%', minHeight: 260 }}>
       <div className="panel-title shrink-0">
         <div className="flex items-center gap-3">
           <span>Chart</span>
@@ -392,13 +423,36 @@ function PriceChart({ market, candles, interval = '1m', onIntervalChange }) {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
-          <BarChart3 size={13} />
-          <span>Candles</span>
+        {/* Chart type toggle */}
+        <div className="flex items-center gap-0.5 rounded-md border border-white/5 bg-white/[0.03] p-0.5">
+          <button
+            onClick={() => setChartType('candle')}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] transition ${
+              chartType === 'candle' ? 'bg-white/10 text-amber-400' : 'text-slate-600 hover:text-slate-400'
+            }`}
+          >
+            <BarChart3 size={11} />
+            Candles
+          </button>
+          <button
+            onClick={() => setChartType('line')}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] transition ${
+              chartType === 'line' ? 'bg-white/10 text-amber-400' : 'text-slate-600 hover:text-slate-400'
+            }`}
+          >
+            <Activity size={11} />
+            Line
+          </button>
         </div>
       </div>
       <div className="flex-1 min-h-0 px-1 pb-1">
-        <CandlestickChart market={market} candles={candles} />
+        <CandlestickChart
+          market={market}
+          candles={candles}
+          interval={interval}
+          chartType={chartType}
+          livePrice={livePrice}
+        />
       </div>
     </section>
   )
@@ -453,10 +507,10 @@ function OrderBook({ market, depth, livePrice }) {
       </div>
       <div className="flex-1 overflow-y-auto min-h-0">
         <div>{asksWithDepth.map((x, i) => row(x, 'ask', i))}</div>
-        <div className="flex items-center gap-2 border-y border-white/5 px-3 py-1.5 font-mono text-xs font-bold shrink-0">
+        <div className="flex items-center gap-2 border-y border-white/[0.06] px-3 py-2 font-mono text-sm font-bold shrink-0" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.02) 0%, transparent 100%)' }}>
           {market.change >= 0
-            ? <ArrowUp size={13} className="text-emerald-400" />
-            : <ArrowDown size={13} className="text-rose-400" />}
+            ? <ArrowUp size={14} className="text-emerald-400" />
+            : <ArrowDown size={14} className="text-rose-400" />}
           <span className={`tabular-nums ${market.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatPrice(mid)}</span>
           <span className="ml-auto text-[10px] font-normal text-slate-600">Spread 0.01%</span>
         </div>
@@ -490,7 +544,7 @@ function RecentTrades({ market, tradesList, livePrice }) {
           <div key={t.id ?? i} className="grid grid-cols-3 px-3 py-[3.5px] font-mono text-[11px] hover:bg-white/[0.025]">
             <span className={t.side === 'buy' ? 'text-emerald-400' : 'text-rose-400'}>{formatPrice(t.price)}</span>
             <span className="text-right text-slate-400 tabular-nums">{(isNaN(Number(t.amount)) ? 0 : Number(t.amount)).toFixed(5)}</span>
-            <span className="text-right text-slate-600">{t.time ?? '—'}</span>
+            <span className="text-right text-slate-600" suppressHydrationWarning>{t.time ?? '—'}</span>
           </div>
         ))}
       </div>
@@ -501,31 +555,43 @@ function RecentTrades({ market, tradesList, livePrice }) {
 // ─── Field (input helper) ─────────────────────────────────────────────────────
 function Field({ label, value, onChange, suffix, readOnly }) {
   return (
-    <label className="mb-2 flex items-center rounded-lg border border-white/5 bg-white/[0.025] px-3 py-2.5 focus-within:border-amber-400/30">
-      <span className="w-14 shrink-0 text-[11px] text-slate-600">{label}</span>
+    <label className="mb-2 flex items-center rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-colors focus-within:border-amber-400/30 focus-within:bg-white/[0.03]">
+      <span className="w-14 shrink-0 text-[11px] font-medium text-slate-600">{label}</span>
       <input
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         readOnly={readOnly}
         inputMode="decimal"
-        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-right font-mono text-xs text-slate-200 focus:ring-0 disabled:opacity-50"
+        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-right font-mono text-[13px] text-slate-200 focus:ring-0 disabled:opacity-50"
       />
-      <span className="ml-2 w-10 shrink-0 text-right text-[11px] text-slate-500">{suffix}</span>
+      <span className="ml-2 w-10 shrink-0 text-right text-[10px] font-medium text-slate-500">{suffix}</span>
     </label>
   )
 }
 
 // ─── Order Form ───────────────────────────────────────────────────────────────
-function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLocalTrade }) {
+function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLocalTrade, livePrice }) {
   const { user } = useAuth()
   const [type, setType] = useState('Limit')
   const [price, setPrice] = useState(String(market.price))
+  const [priceEdited, setPriceEdited] = useState(false)
   const [amount, setAmount] = useState('')
   const [stopPrice, setStopPrice] = useState('')
   const [busy, setBusy] = useState(false)
   const stepSize = market.stepSize || '0.000001'
 
-  useEffect(() => { setPrice(String(market.price)) }, [market.price])
+  // Reset on coin change
+  useEffect(() => {
+    setPrice(String(market.price))
+    setPriceEdited(false)
+  }, [market.symbol, market.price])
+
+  // Auto-track live price unless user manually edited the field
+  useEffect(() => {
+    if (!priceEdited && livePrice && type !== 'Market') {
+      setPrice(livePrice.toFixed(2))
+    }
+  }, [livePrice, priceEdited, type])
 
   function applyPercent(pct) {
     const p = Number(price || market.price)
@@ -541,39 +607,42 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
 
   async function submit(e) {
     e.preventDefault()
-    if (!user) return onAuthOpen()
     const cleanAmt = floorToStep(amount, stepSize)
     if (!cleanAmt || Number(cleanAmt) <= 0) return toast.error('Enter a valid amount')
     if (type === 'Stop' && (!stopPrice || Number(stopPrice) <= 0)) return toast.error('Enter a valid stop price')
 
     const p = Number(price || market.price)
     const a = Number(cleanAmt)
-    const cost = side === 'BUY' ? a * p : a
+    const cost = a * p
 
     if (side === 'BUY' && Number(balances.USDT || 0) < cost) return toast.error('Insufficient USDT balance')
     if (side === 'SELL' && Number(balances[market.base] || 0) < a) return toast.error(`Insufficient ${market.base} balance`)
 
+    // Demo mode (not logged in): simulate the trade against virtual balances.
+    if (!user) {
+      onLocalTrade?.({ side, base: market.base, amount: a, price: p, cost })
+      toast.success(`Demo ${side === 'BUY' ? 'buy' : 'sell'} — ${cleanAmt} ${market.base} @ ${formatPrice(p)} USDT`)
+      setAmount('')
+      return
+    }
+
     setBusy(true)
     try {
-      try {
-        if (type === 'Market' && side === 'BUY') {
-          await tradingService.placeMarketOrder(market.symbol, side, '0', String(cost))
-        } else if (type === 'Market') {
-          await tradingService.placeMarketOrder(market.symbol, side, cleanAmt)
-        } else if (type === 'Stop') {
-          await tradingService.placeStopOrder(market.symbol, side, stopPrice, cleanAmt, price)
-        } else {
-          await tradingService.placeLimitOrder(market.symbol, side, price, cleanAmt)
-        }
-      } catch {
-        // Backend unavailable — simulate locally
+      if (type === 'Market' && side === 'BUY') {
+        await tradingService.placeMarketOrder(market.symbol, side, '0', String(cost))
+      } else if (type === 'Market') {
+        await tradingService.placeMarketOrder(market.symbol, side, cleanAmt)
+      } else if (type === 'Stop') {
+        await tradingService.placeStopOrder(market.symbol, side, stopPrice, cleanAmt, price)
+      } else {
+        await tradingService.placeLimitOrder(market.symbol, side, price, cleanAmt)
       }
-      onLocalTrade?.({ side, base: market.base, amount: a, price: p, cost })
-      toast.success(`${side === 'BUY' ? '🟢 Buy' : '🔴 Sell'} order placed — ${cleanAmt} ${market.base} @ ${formatPrice(p)} USDT`)
+      const where = type === 'Market' ? 'at market' : `@ ${formatPrice(p)} USDT`
+      toast.success(`${side === 'BUY' ? '🟢 Buy' : '🔴 Sell'} order placed — ${cleanAmt} ${market.base} ${where}`)
       setAmount('')
       onOrderSubmitted?.()
     } catch (err) {
-      toast.error(err.message || 'Order could not be submitted')
+      toast.error(err?.message || 'Order could not be submitted')
     } finally {
       setBusy(false)
     }
@@ -585,7 +654,7 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
 
   return (
     <form onSubmit={submit} className="flex-1 px-4 py-3">
-      <div className="mb-3 flex gap-4 text-xs">
+      <div className="mb-1.5 flex gap-4 text-xs">
         {['Limit', 'Market', 'Stop'].map((t) => (
           <button type="button" key={t} onClick={() => setType(t)}
             className={type === t ? 'text-amber-400 font-semibold' : 'text-slate-600 hover:text-slate-300'}
@@ -594,8 +663,13 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
           </button>
         ))}
       </div>
+      <p className="mb-2.5 text-[10px] leading-snug text-slate-500">
+        {type === 'Market' && 'Buys or sells instantly at the current price.'}
+        {type === 'Limit' && 'Set your own price — fills only when the market reaches it.'}
+        {type === 'Stop' && 'Triggers an order once the price hits your chosen level.'}
+      </p>
       <div className="mb-2 flex items-center justify-between rounded-lg bg-white/[0.02] px-3 py-2 text-[11px]">
-        <span className="text-slate-500">Available</span>
+        <span className="text-slate-500">{side === 'BUY' ? 'Cash to spend' : 'Coins to sell'}</span>
         <span className="font-mono text-slate-300" suppressHydrationWarning>
           {side === 'BUY'
             ? `${usdBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
@@ -603,12 +677,29 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
         </span>
       </div>
       {type === 'Stop' && <Field label="Stop" value={stopPrice} onChange={setStopPrice} suffix="USDT" />}
-      {type !== 'Market' && <Field label="Price" value={price} onChange={setPrice} suffix="USDT" />}
+      {type !== 'Market' && (
+        <div className="relative">
+          <Field label="Price" value={price} onChange={(v) => { setPrice(v); setPriceEdited(true) }} suffix="USDT" />
+          {!priceEdited && (
+            <span className="absolute left-16 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400 pointer-events-none">
+              <span className="h-1 w-1 rounded-full bg-emerald-400" /> LIVE
+            </span>
+          )}
+          {priceEdited && (
+            <button type="button" onClick={() => { setPriceEdited(false) }}
+              className="absolute left-16 top-1/2 -translate-y-1/2 rounded bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 hover:bg-amber-400/25"
+              title="Reset to live market price"
+            >
+              ↺ RESET
+            </button>
+          )}
+        </div>
+      )}
       <Field label="Amount" value={amount} onChange={setAmount} suffix={market.base} />
       <div className="my-2.5 flex items-center gap-1">
         {[25, 50, 75, 100].map((pct) => (
           <button type="button" key={pct} onClick={() => applyPercent(pct)}
-            className="flex-1 rounded bg-white/[0.04] py-1.5 text-[10px] text-slate-500 hover:bg-white/[0.09] hover:text-slate-200 transition"
+            className="flex-1 rounded-md bg-white/[0.04] py-1.5 text-[10px] font-medium text-slate-500 transition-all duration-150 hover:bg-white/[0.08] hover:text-slate-200 active:scale-95"
           >
             {pct}%
           </button>
@@ -620,20 +711,16 @@ function OrderForm({ market, side, onAuthOpen, onOrderSubmitted, balances, onLoc
       </div>
       <button
         disabled={busy}
-        className={`w-full rounded-lg py-2.5 text-sm font-bold text-white transition disabled:opacity-60 ${
-          side === 'BUY'
-            ? 'bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'
-            : 'bg-rose-500 hover:bg-rose-400 shadow-lg shadow-rose-500/20'
-        }`}
+        className={`w-full disabled:opacity-60 ${side === 'BUY' ? 'btn-buy' : 'btn-sell'}`}
       >
-        {busy ? 'Placing...' : user ? `${side === 'BUY' ? 'Buy' : 'Sell'} ${market.base}` : 'Log in to trade'}
+        {busy ? 'Placing...' : `${side === 'BUY' ? 'Buy' : 'Sell'} ${market.base}`}
       </button>
     </form>
   )
 }
 
 // ─── Trading Panel ────────────────────────────────────────────────────────────
-function TradingPanel({ market, onAuthOpen, balances, onOrderSubmitted, onLocalTrade }) {
+function TradingPanel({ market, onAuthOpen, balances, onOrderSubmitted, onLocalTrade, livePrice }) {
   return (
     <section className="panel trading-panel overflow-hidden shrink-0">
       <div className="panel-title">
@@ -643,8 +730,8 @@ function TradingPanel({ market, onAuthOpen, balances, onOrderSubmitted, onLocalT
         </span>
       </div>
       <div className="flex divide-x divide-white/5">
-        <OrderForm market={market} side="BUY" onAuthOpen={onAuthOpen} balances={balances} onOrderSubmitted={onOrderSubmitted} onLocalTrade={onLocalTrade} />
-        <OrderForm market={market} side="SELL" onAuthOpen={onAuthOpen} balances={balances} onOrderSubmitted={onOrderSubmitted} onLocalTrade={onLocalTrade} />
+        <OrderForm market={market} side="BUY" onAuthOpen={onAuthOpen} balances={balances} onOrderSubmitted={onOrderSubmitted} onLocalTrade={onLocalTrade} livePrice={livePrice} />
+        <OrderForm market={market} side="SELL" onAuthOpen={onAuthOpen} balances={balances} onOrderSubmitted={onOrderSubmitted} onLocalTrade={onLocalTrade} livePrice={livePrice} />
       </div>
     </section>
   )
@@ -697,11 +784,93 @@ function OpenOrders({ orders = [], onCancel, localOrders = [] }) {
 }
 
 // ─── Auth Modal ───────────────────────────────────────────────────────────────
+// ─── Welcome / How-it-works guide (beginner onboarding) ───────────────────────
+function ExplainRow({ icon, title, body }) {
+  return (
+    <div className="flex gap-3">
+      <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-400/10 text-amber-400">
+        {icon}
+      </div>
+      <div>
+        <div className="font-semibold text-white">{title}</div>
+        <div className="text-xs leading-relaxed text-slate-400">{body}</div>
+      </div>
+    </div>
+  )
+}
+
+function WelcomeModal({ open, onClose }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
+      <div
+        className="w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#0d1118] p-7 shadow-2xl animate-slide-up"
+        style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 1px rgba(255,255,255,0.1)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 text-[#0b0e14]">
+              <GraduationCap size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Welcome to TradeOff 👋</h2>
+              <p className="text-xs text-slate-500">A risk-free way to learn crypto trading</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="icon-button"><X size={16} /></button>
+        </div>
+
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2.5 text-sm text-emerald-300">
+          <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+          <span><b>It&apos;s all practice money.</b> Nothing here is real. Buy and sell freely — you can&apos;t lose anything.</span>
+        </div>
+
+        <div className="space-y-3.5 text-sm">
+          <ExplainRow
+            icon={<CircleDollarSign size={16} />}
+            title="USDT = your digital dollars"
+            body="You start with 100,000 USDT. Just think of USDT as US dollars — 1 USDT ≈ $1. It's the cash you use to buy crypto."
+          />
+          <ExplainRow
+            icon={<Bitcoin size={16} />}
+            title="BTC, ETH, SOL… are cryptocurrencies"
+            body="These are the coins you can buy and sell. BTC = Bitcoin, ETH = Ethereum, SOL = Solana. Their prices move in real time, just like the real market."
+          />
+          <ExplainRow
+            icon={<TrendingUp size={16} />}
+            title="How to trade — 3 steps"
+            body="1) Pick a coin from the list on the left. 2) Type how much you want to spend. 3) Hit the green Buy (or red Sell) button. Your cash and coins update instantly."
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            Order types — new? Just use “Market”
+          </div>
+          <ul className="space-y-1.5 text-xs text-slate-400">
+            <li><b className="text-amber-400">Market</b> — buy or sell instantly at the current price. The simplest option.</li>
+            <li><b className="text-amber-400">Limit</b> — choose your own price; it only fills when the market reaches it.</li>
+            <li><b className="text-amber-400">Stop</b> — an order that activates once the price hits a level you set.</li>
+          </ul>
+        </div>
+
+        <button onClick={onClose} className="btn-primary mt-5 w-full">
+          Got it — let&apos;s trade
+        </button>
+        <p className="mt-2.5 text-center text-[11px] text-slate-600">
+          You can reopen this guide anytime from the <HelpCircle size={11} className="inline -mt-0.5" /> button in the top bar.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function AuthModal({ open, onClose }) {
   const { login, register } = useAuth()
   const [mode, setMode] = useState('register')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('Password123!')
+  const [password, setPassword] = useState('')
   const [referralCode, setReferralCode] = useState('')
   const [busy, setBusy] = useState(false)
   if (!open) return null
@@ -732,14 +901,15 @@ function AuthModal({ open, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#10141d] p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d1118] p-7 shadow-2xl animate-slide-up"
+        style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 1px rgba(255,255,255,0.1)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-bold text-white">
               {mode === 'login' ? 'Welcome back' : 'Create your account'}
             </h2>
             <p className="mt-1 text-xs text-slate-500">TradeOff exchange simulator</p>
@@ -753,21 +923,21 @@ function AuthModal({ open, onClose }) {
           </label>
           <label className="auth-label">
             Password
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="auth-input" required />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="auth-input" placeholder="Min 8 characters" required />
           </label>
           {mode === 'register' && (
             <label className="auth-label">
-              Referral Code (optional)
+              Referral Code <span className="text-slate-600">(optional)</span>
               <input value={referralCode} onChange={(e) => setReferralCode(e.target.value)} type="text" className="auth-input" placeholder="e.g. LIQUIDITY" />
             </label>
           )}
-          <button disabled={busy} className="mt-2 w-full rounded-lg bg-amber-400 py-2.5 text-sm font-bold text-[#0b0e14] hover:bg-amber-300 disabled:opacity-60 transition">
+          <button disabled={busy} className="btn-primary mt-2 w-full disabled:opacity-60">
             {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}
           </button>
         </form>
         <button
           onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-          className="mt-4 w-full text-center text-xs text-slate-500 hover:text-slate-300"
+          className="mt-5 w-full text-center text-xs text-slate-500 transition hover:text-amber-400"
         >
           {mode === 'login' ? 'New here? Create an account →' : 'Already have an account? Log in →'}
         </button>
@@ -777,11 +947,33 @@ function AuthModal({ open, onClose }) {
 }
 
 // ─── Root Page ────────────────────────────────────────────────────────────────
-export default function Home() {
+function HomeInner() {
   const { user } = useAuth()
   const websocket = useWebSocket()
+  const searchParams = useSearchParams()
   const [selected, setSelected] = useState(MARKET_SEED[0])
   const [authOpen, setAuthOpen] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
+
+  // Pre-select a market from ?symbol= URL param (e.g. from market page Trade button)
+  useEffect(() => {
+    const sym = searchParams?.get('symbol')
+    if (sym) {
+      const match = MARKET_SEED.find((m) => m.symbol === sym)
+      if (match) setSelected(match)
+    }
+  }, [searchParams])
+
+  // Show the beginner guide automatically on a user's first visit.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!localStorage.getItem('tradeoff_welcomed')) setWelcomeOpen(true)
+  }, [])
+
+  function closeWelcome() {
+    setWelcomeOpen(false)
+    if (typeof window !== 'undefined') localStorage.setItem('tradeoff_welcomed', '1')
+  }
   const [liveTickers, setLiveTickers] = useState({})
   const [candles, setCandles] = useState([])
   const [depth, setDepth] = useState({ bids: [], asks: [] })
@@ -789,6 +981,25 @@ export default function Home() {
   const [localOrders, setLocalOrders] = useState([])
   const [mobileTab, setMobileTab] = useState('orderbook')
   const [chartInterval, setChartInterval] = useState('1m')
+
+  // ── Fetch real Binance 24h prices on startup to seed liveTickers ─────────
+  useEffect(() => {
+    tradingService.getBinanceTickers(MARKET_SEED.map((m) => m.symbol)).then((data) => {
+      if (!data?.length) return
+      const map = {}
+      data.forEach((d) => {
+        map[d.symbol] = {
+          symbol: d.symbol,
+          price: d.lastPrice,
+          change_pct_24h: d.priceChangePercent,
+          high_24h: d.highPrice,
+          low_24h: d.lowPrice,
+          volume_24h: d.volume,
+        }
+      })
+      setLiveTickers((cur) => ({ ...map, ...cur })) // backend WS takes priority
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Virtual balances persisted to localStorage
   const [virtualBalances, setVirtualBalances] = useState(() => {
@@ -907,13 +1118,21 @@ export default function Home() {
     async function loadData() {
       try {
         const sym = selected.symbol
-        const [c, d, t] = await Promise.all([
+        const [backendCandles, d, t] = await Promise.all([
           tradingService.getCandles(sym, chartInterval).catch(() => []),
           tradingService.getDepth(sym, 50).catch(() => ({ bids: [], asks: [] })),
           tradingService.getRecentTrades(sym, 50).catch(() => []),
         ])
         if (!active) return
-        if (c?.length) setCandles(c)
+
+        // Prefer backend candles; fall back to real Binance public klines
+        if (backendCandles?.length) {
+          setCandles(backendCandles)
+        } else {
+          const binanceCandles = await tradingService.getBinanceCandles(sym, chartInterval, 150)
+          if (active && binanceCandles?.length) setCandles(binanceCandles)
+        }
+
         if (d?.bids?.length || d?.asks?.length) setDepth(d)
         if (t?.length) {
           setTradesList(t.map((x) => ({
@@ -932,33 +1151,27 @@ export default function Home() {
     return () => { active = false; clearInterval(iv) }
   }, [selected.symbol, chartInterval])
 
-  // WebSocket: live tickers
+  // WebSocket: live tickers — throttled to max 1 React state update per second
   useEffect(() => {
     if (!websocket) return
-    return websocket.subscribe('market.tickers', (event) => {
+    let pending = {}
+    let rafId = null
+    const flush = () => {
+      if (Object.keys(pending).length === 0) return
+      const snapshot = pending
+      pending = {}
+      setLiveTickers((cur) => ({ ...cur, ...snapshot }))
+    }
+    const unsub = websocket.subscribe('market.tickers', (event) => {
       const updates = event.tickers || []
-      setLiveTickers((cur) => {
-        const next = { ...cur }
-        updates.forEach((t) => { next[t.symbol] = t })
-        return next
-      })
-      // Update last candle's close from ticker
-      const match = updates.find((t) => t.symbol === selected.symbol)
-      if (match) {
-        const newPrice = Number(match.price)
-        setCandles((cur) => {
-          if (!cur.length) return cur
-          const next = [...cur]
-          const last = { ...next[next.length - 1] }
-          last.close = String(newPrice)
-          if (newPrice > Number(last.high)) last.high = String(newPrice)
-          if (newPrice < Number(last.low)) last.low = String(newPrice)
-          next[next.length - 1] = last
-          return next
-        })
-      }
+      updates.forEach((t) => { pending[t.symbol] = t })
+      if (!rafId) rafId = setTimeout(() => { rafId = null; flush() }, 1000)
     })
-  }, [websocket, selected.symbol])
+    return () => {
+      unsub?.()
+      if (rafId) clearTimeout(rafId)
+    }
+  }, [websocket])
 
   // WebSocket: live trades + order book for current pair
   useEffect(() => {
@@ -1029,14 +1242,18 @@ export default function Home() {
     <div className="min-h-screen bg-[#070a0f] text-slate-300">
       <Toaster
         position="bottom-right"
-        toastOptions={{ style: { background: '#171c26', color: '#e2e8f0', border: '1px solid rgba(255,255,255,.08)' } }}
+        toastOptions={{
+          style: { background: 'var(--t-panel)', color: 'var(--t-text)', border: '1px solid var(--t-border)', borderRadius: '12px', fontSize: '13px', boxShadow: '0 12px 40px var(--t-shadow)' },
+          success: { iconTheme: { primary: '#10b981', secondary: 'var(--t-panel)' } },
+          error: { iconTheme: { primary: '#ef4444', secondary: 'var(--t-panel)' } },
+        }}
       />
-      <Header onAuthOpen={() => setAuthOpen(true)} markets={markets} onSelectMarket={setSelected} />
+      <Header onAuthOpen={() => setAuthOpen(true)} onHelpOpen={() => setWelcomeOpen(true)} markets={markets} onSelectMarket={setSelected} />
 
       <div className="flex overflow-hidden" style={{ height: `calc(100dvh - ${HEADER_H}px)` }}>
         <SideRail />
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden p-1.5 gap-1.5">
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-1.5 gap-1.5">
 
           {/* Mobile: horizontal coin selector (hidden on xl+) */}
           <div className="xl:hidden flex overflow-x-auto gap-1 pb-0.5 shrink-0" style={{ scrollbarWidth: 'none' }}>
@@ -1059,7 +1276,7 @@ export default function Home() {
           </div>
 
           {/* Top row: Market Selector | Ticker+Chart | Order Book */}
-          <div className="grid min-h-0 flex-1 gap-1.5 xl:grid-cols-[220px_minmax(0,1fr)_260px]">
+          <div className="grid min-h-0 flex-1 gap-1.5 xl:grid-cols-[220px_minmax(0,1fr)_260px] xl:min-h-[360px]">
 
             {/* Left: Market Selector — desktop only */}
             <div className="hidden xl:flex xl:flex-col min-h-0">
@@ -1069,8 +1286,8 @@ export default function Home() {
             {/* Center: Ticker strip + Chart */}
             <div className="flex min-w-0 flex-col gap-1.5 min-h-0">
               <TickerStrip market={market} livePrice={livePrice} />
-              <div className="flex-1 min-h-0">
-                <PriceChart market={market} candles={candles} interval={chartInterval} onIntervalChange={setChartInterval} />
+              <div className="flex-1 min-h-0" style={{ minHeight: 260 }}>
+                <PriceChart market={market} candles={candles} interval={chartInterval} onIntervalChange={setChartInterval} livePrice={livePrice} />
               </div>
             </div>
 
@@ -1080,13 +1297,18 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Bottom row: Trading Panel + Open Orders | Recent Trades */}
-          <div className="grid gap-1.5 xl:grid-cols-[minmax(0,1fr)_260px]" style={{ minHeight: 280 }}>
+          {/* Bottom row: Trading Panel + Open Orders | Recent Trades.
+              Definite height so the Market Trades / Open Orders lists scroll
+              internally instead of expanding the row and crushing the chart. */}
+          <div className="grid gap-1.5 min-h-0 shrink-0 xl:grid-cols-[minmax(0,1fr)_260px] xl:h-[460px]" style={{ minHeight: 280 }}>
             <div className="flex flex-col gap-1.5 min-h-0">
               {!user && (
-                <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-1.5 text-[11px] text-slate-600">
-                  <span>Demo mode — virtual balance active.</span>
-                  <button onClick={resetVirtualBalances} className="text-amber-400 hover:underline">Reset</button>
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3 py-2 text-xs text-amber-300">
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                    <strong>Paper trading mode</strong> — all money is virtual (USDT ≈ USD). You can&apos;t lose real money.
+                  </span>
+                  <button onClick={resetVirtualBalances} className="shrink-0 text-amber-400/60 hover:text-amber-400 hover:underline transition text-[11px]">Reset balance</button>
                 </div>
               )}
               <TradingPanel
@@ -1095,6 +1317,7 @@ export default function Home() {
                 onAuthOpen={() => setAuthOpen(true)}
                 onOrderSubmitted={onOrderSubmitted}
                 onLocalTrade={applyLocalTrade}
+                livePrice={livePrice}
               />
               <OpenOrders
                 orders={ordersQuery.data?.orders || []}
@@ -1138,6 +1361,15 @@ export default function Home() {
       </div>
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <WelcomeModal open={welcomeOpen} onClose={closeWelcome} />
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
   )
 }

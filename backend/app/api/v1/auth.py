@@ -81,13 +81,14 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
     import string
     user_ref_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
-    # Create user
+    # Create user — auto-activate so they can trade immediately in this simulator
     user = User(
         id=uuid.uuid4(),
         email=email,
         password_hash=hash_password(req.password),
         display_name=email.split("@")[0],
         referral_code=user_ref_code,
+        status="ACTIVE",
     )
 
     # Process referral code if provided
@@ -142,6 +143,13 @@ async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(
 
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if user.status == "SUSPENDED":
+        raise HTTPException(status_code=403, detail="Account is suspended. Contact support.")
+
+    # Auto-activate legacy PENDING_VERIFICATION accounts (simulator — no real email flow)
+    if user.status == "PENDING_VERIFICATION":
+        user.status = "ACTIVE"
 
     if user.mfa_enabled:
         if not req.totp_code:

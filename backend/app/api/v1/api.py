@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.admin import router as admin_router
+from app.api.v1.blockchain import router as blockchain_router
 from app.api.v1.ai_assistant import router as ai_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.auth import router as auth_router
@@ -34,3 +35,4 @@ api_router.include_router(copy_trading_router, prefix="/copy-trading", tags=["Co
 api_router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(operations_router, prefix="/operations", tags=["Operations"])
 api_router.include_router(demo_router, prefix="/demo", tags=["Demo"])
+api_router.include_router(blockchain_router, prefix="/blockchain", tags=["Blockchain"])

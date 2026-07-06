@@ -1,10 +1,18 @@
-"""AI Trading Assistant API endpoint."""
+"""AI Trading Assistant API — real LLM responses via OpenRouter with live market context."""
+
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import current_user_id
+from app.db.session import get_db
+from app.models.asset import Asset
+from app.models.wallet import UserWallet
+from app.services import ai_service
+from app.services.market_data_service import market_data_service
 
 router = APIRouter()
 
@@ -17,80 +25,88 @@ class ChatResponse(BaseModel):
     response: str
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def ai_chat(req: ChatRequest):
-    """Chat with the AI trading assistant."""
-    # In production, this would call OpenAI/Claude with market context
-    message = req.message.lower()
+async def _optional_user_id(request) -> uuid.UUID | None:
+    return getattr(request.state, "user_id", None)
 
-    if "portfolio" in message:
-        return ChatResponse(
-            response="To analyze your portfolio, I need your current holdings. "
-                     "Please check your portfolio dashboard for real-time P&L, "
-                     "allocation, and performance metrics."
-        )
-    elif "market" in message or "btc" in message or "price" in message:
-        return ChatResponse(
-            response="Market analysis: Bitcoin is showing strong momentum with "
-                     "increased trading volume. Key support levels are being tested. "
-                     "Consider setting stop-losses to manage risk."
-        )
-    elif "risk" in message:
-        return ChatResponse(
-            response="Risk analysis: Based on current market volatility, consider "
-                     "reducing position sizes and using stop-loss orders. "
-                     "Diversification across multiple assets is recommended."
-        )
-    elif "trade" in message or "order" in message:
-        return ChatResponse(
-            response="When placing trades, consider the current spread, volume, "
-                     "and market depth. Limit orders typically get better prices "
-                     "than market orders for patient traders."
-        )
-    else:
-        return ChatResponse(
-            response="I'm your AI Trading Assistant. I can help with:\n"
-                     "- Portfolio analysis\n"
-                     "- Market summaries\n"
-                     "- Trade explanations\n"
-                     "- Risk analysis\n"
-                     "- Market insights\n\n"
-                     "What would you like to know?"
-        )
+
+def _gather_tickers() -> list[dict]:
+    tickers = []
+    for tick in market_data_service.all_ticks():
+        tickers.append({
+            "symbol": tick.symbol,
+            "price": tick.price,
+            "change_pct": round(float(tick.change_pct_24h), 2),
+            "volume": tick.volume_24h or 0,
+        })
+    return tickers
+
+
+async def _gather_holdings(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    result = await db.execute(
+        select(UserWallet, Asset)
+        .join(Asset, UserWallet.asset_id == Asset.id)
+        .where(UserWallet.user_id == user_id)
+    )
+    holdings = []
+    for wallet, asset in result.all():
+        available = float(wallet.available)
+        if available <= 0:
+            continue
+        tick = market_data_service.get_tick(f"{asset.symbol}USDT")
+        price = float(tick.price) if tick else (1.0 if asset.symbol == "USDT" else 0)
+        holdings.append({
+            "asset": asset.symbol,
+            "available": wallet.available,
+            "locked": wallet.locked,
+            "value_usdt": available * price,
+        })
+    return holdings
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def ai_chat(
+    req: ChatRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    tickers = _gather_tickers()
+
+    holdings = None
+    uid = await _optional_user_id(request)
+    if uid:
+        try:
+            holdings = await _gather_holdings(db, uid)
+        except Exception:
+            pass
+
+    response = await ai_service.chat(
+        message=req.message,
+        tickers=tickers,
+        holdings=holdings,
+    )
+    return ChatResponse(response=response)
 
 
 @router.post("/portfolio-analysis")
-async def ai_portfolio_analysis(user_id: uuid.UUID = Depends(current_user_id)):
-    """Get AI-powered portfolio analysis."""
-    return {
-        "summary": "Your portfolio is well-diversified across 3 assets.",
-        "recommendations": [
-            "Consider rebalancing to maintain target allocation",
-            "Set stop-losses on volatile positions",
-            "Review your risk tolerance given current market conditions",
-        ],
-        "risk_score": "MODERATE",
-        "market_outlook": "NEUTRAL",
-    }
+async def ai_portfolio_analysis(
+    user_id: uuid.UUID = Depends(current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    holdings = await _gather_holdings(db, user_id)
+    tickers = _gather_tickers()
+    return await ai_service.portfolio_analysis(holdings=holdings, tickers=tickers)
 
 
 @router.post("/market-summary")
-async def ai_market_summary(pair: str = "BTCUSDT"):
-    """Get AI-powered market summary for a trading pair."""
-    return {
-        "pair": pair.upper(),
-        "summary": f"{pair.upper()} is showing mixed signals. Volume is above "
-                   f"average with increasing volatility.",
-        "technical_indicators": {
-            "rsi": "NEUTRAL (52)",
-            "macd": "BULLISH_CROSS",
-            "moving_averages": "BULLISH",
-            "support": "Key support at recent lows",
-            "resistance": "Major resistance at recent highs",
-        },
-        "sentiment": "NEUTRAL",
-        "key_levels": {
-            "support": ["Previous day low", "Weekly support"],
-            "resistance": ["Previous day high", "Monthly high"],
-        },
-    }
+async def ai_market_summary(pair: str = Query(default="BTCUSDT")):
+    tick = market_data_service.get_tick(pair.upper())
+    ticker = None
+    if tick:
+        ticker = {
+            "price": tick.price,
+            "change_pct": round(float(tick.change_pct_24h), 2),
+            "volume": tick.volume_24h or 0,
+            "high": tick.high_24h or 0,
+            "low": tick.low_24h or 0,
+        }
+    return await ai_service.market_summary(pair=pair.upper(), ticker=ticker)

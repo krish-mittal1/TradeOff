@@ -3,11 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ProductShell, StatCard } from '@/components/ProductShell'
+import { Copy, User } from 'lucide-react'
+import { ProductShell, StatCard, LoginGate } from '@/components/ProductShell'
 import { apiClient } from '@/services/api'
 import { authService } from '@/services/authService'
+import { useAuth } from '@/providers/AuthProvider'
 
 export default function ProfilePage() {
+  const { user } = useAuth()
   const [displayName, setDisplayName] = useState('')
   const [totp, setTotp] = useState('')
   const [secret, setSecret] = useState('')
@@ -86,6 +89,12 @@ export default function ProfilePage() {
     }
   }
 
+  if (!user) return (
+    <ProductShell title="Profile" subtitle="Manage your account settings and security options.">
+      <LoginGate icon={User} message="Sign in to view and edit your profile, set up MFA, and manage API keys." />
+    </ProductShell>
+  )
+
   return <ProductShell title="Profile & Security" subtitle="Account settings, MFA, and personal risk controls.">
     <div className="grid gap-3 md:grid-cols-3">
       <StatCard label="Account" value={me?.status || 'Unknown'} detail={me?.email} />
@@ -148,7 +157,7 @@ export default function ProfilePage() {
     <div className="panel mt-4 p-5">
       <div className="panel-title -mx-5 -mt-5 mb-4">Referral Program</div>
       <div className="grid gap-3 md:grid-cols-3 text-sm">
-        <div><div className="text-slate-600">My Referral Code</div><div className="mt-1 text-white font-mono font-semibold">{me?.referral_code || '-'}</div></div>
+        <div><div className="text-slate-600">My Referral Code</div><div className="mt-1 flex items-center gap-2 text-white font-mono font-semibold">{me?.referral_code || '-'}{me?.referral_code && <button onClick={() => { navigator.clipboard.writeText(me.referral_code); toast.success('Referral code copied') }} className="text-amber-400 hover:text-amber-300"><Copy size={13} /></button>}</div></div>
         <div><div className="text-slate-600">Total Referrals</div><div className="mt-1 text-white font-semibold">{referralsQuery.data?.referrals || 0}</div></div>
         <div><div className="text-slate-600">Accumulated Rewards</div><div className="mt-1 text-white font-semibold">${Number(referralsQuery.data?.rewards || 0).toLocaleString()} USDT</div></div>
       </div>
@@ -159,8 +168,12 @@ export default function ProfilePage() {
     <div className="panel mt-4 p-5">
       <div className="panel-title -mx-5 -mt-5 mb-4">API Keys</div>
       {apiSecret && <div className="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs text-amber-200">
-        <div>Key: <span className="font-mono">{apiSecret.key}</span></div>
-        <div className="mt-1">Secret: <span className="font-mono">{apiSecret.secret}</span></div>
+        <div className="flex items-center gap-2">Key: <span className="font-mono">{apiSecret.key}</span>
+          <button onClick={() => { navigator.clipboard.writeText(apiSecret.key); toast.success('Key copied') }} className="text-amber-300 hover:text-amber-100"><Copy size={12} /></button>
+        </div>
+        <div className="mt-1 flex items-center gap-2">Secret: <span className="font-mono">{apiSecret.secret}</span>
+          <button onClick={() => { navigator.clipboard.writeText(apiSecret.secret); toast.success('Secret copied') }} className="text-amber-300 hover:text-amber-100"><Copy size={12} /></button>
+        </div>
         <div className="mt-2 text-amber-300">{apiSecret.warning}</div>
       </div>}
       <button onClick={createApiKey} className="rounded-lg bg-white/5 px-4 py-2 text-sm text-amber-400">Create trading API key</button>

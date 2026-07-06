@@ -135,6 +135,17 @@ async def release_order_funds(
     return release
 
 
+# Settlement absorbs sub-unit drift from Decimal division during multi-level
+# fills (e.g. (quote/price)*price rounding a hair over budget). The reservation
+# is the authority, so a shortfall within this tolerance is clamped rather than
+# rejected; anything larger is a genuine invariant violation.
+_SETTLE_TOLERANCE = Decimal("1e-6")
+
+
+def _reserve_ok(locked: Decimal, needed: Decimal) -> bool:
+    return locked >= needed - (abs(needed) * _SETTLE_TOLERANCE + Decimal("1e-12"))
+
+
 async def settle_trade(
     db: AsyncSession,
     *,
@@ -154,14 +165,18 @@ async def settle_trade(
 
     quote_cost = trade.quote_quantity
     buyer_debit = quote_cost + buyer_fee
-    if buyer_quote.locked < buyer_debit:
+    if not _reserve_ok(buyer_quote.locked, buyer_debit):
         raise HTTPException(status_code=409, detail="Buyer reserve invariant violated")
-    if seller_base.locked < trade.quantity:
+    if not _reserve_ok(seller_base.locked, trade.quantity):
         raise HTTPException(status_code=409, detail="Seller reserve invariant violated")
+
+    # Clamp to the available reservation so locked can never go negative from drift.
+    base_debit = min(trade.quantity, seller_base.locked)
+    buyer_debit = min(buyer_debit, buyer_quote.locked)
 
     buyer_quote.locked -= buyer_debit
     buyer_base.available += trade.quantity
-    seller_base.locked -= trade.quantity
+    seller_base.locked -= base_debit
     seller_quote.available += quote_cost - seller_fee
     for wallet in (buyer_quote, buyer_base, seller_base, seller_quote):
         wallet.version += 1

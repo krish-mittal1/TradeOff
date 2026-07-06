@@ -98,6 +98,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      hardhat:
+        condition: service_healthy
     ports:
       - "8081:8000"
     environment:
@@ -114,8 +116,15 @@ services:
       REFRESH_TOKEN_EXPIRE_DAYS: "7"
       ENVIRONMENT: ${ENVIRONMENT:-development}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000","http://localhost:3002","http://127.0.0.1:3002","http://localhost:8080","http://127.0.0.1:8080","http://localhost:8000","http://127.0.0.1:8000"]}
+      BLOCKCHAIN_NETWORK: ${BLOCKCHAIN_NETWORK:-localhost}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-http://hardhat:8545}
+      DEPLOYER_PRIVATE_KEY: ${DEPLOYER_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-deepseek/deepseek-chat-v3-0324:free}
     volumes:
       - ./backend:/app
+      - ./blockchain/abi:/blockchain/abi:ro
+      - blockchain-data:/blockchain/deployments:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
     logging: *default-logging
 
@@ -162,6 +171,24 @@ services:
       - /app/node_modules
     command: sh -c "rm -rf .next && npm run dev"
     logging: *default-logging
+
+  hardhat:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
+    container_name: cex-hardhat
+    ports:
+      - "8545:8545"
+    volumes:
+      - blockchain-data:/app/deployments
+      - ./blockchain/abi:/app/abi
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').request({hostname:'localhost',port:8545,method:'POST',headers:{'Content-Type':'application/json'}},r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1)).end(JSON.stringify({jsonrpc:'2.0',method:'eth_blockNumber',params:[],id:1}))"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
 
   nginx:
     image: nginx:1.27-alpine
@@ -223,5 +250,6 @@ volumes:
   redis-data:
   kafka-data:
   es-data:
+  blockchain-data:
   prometheus-data:
   grafana-data:

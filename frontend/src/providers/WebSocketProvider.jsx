@@ -1,73 +1,107 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { useAuth } from '@/providers/AuthProvider'
 
 const WebSocketContext = createContext(null)
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws'
+
+// Exponential backoff: 1s → 2s → 4s → 8s → 16s → capped at 30s
+const backoffMs = (attempt) => Math.min(1000 * 2 ** attempt, 30_000)
 
 export function useWebSocket() {
   return useContext(WebSocketContext)
 }
 
 export function WebSocketProvider({ children }) {
-  const auth = useAuth()
-  const user = auth?.user
   const wsRef = useRef(null)
   const [connected, setConnected] = useState(false)
-  const subscriptionsRef = useRef(new Map())
-  const reconnectTimeoutRef = useRef(null)
+  const subscriptionsRef = useRef(new Map())   // channel → Set<handler>
+  const reconnectTimerRef = useRef(null)
+  const attemptRef = useRef(0)
+  const unmountedRef = useRef(false)
 
+  // Stable connect — does not close over changing values; reads from storage at call time
   const connect = useCallback(() => {
-    const token = localStorage.getItem('access_token')
+    if (unmountedRef.current) return
+    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
     const url = token ? `${WS_BASE}?token=${encodeURIComponent(token)}` : WS_BASE
+
     const ws = new WebSocket(url)
+    wsRef.current = ws
 
     ws.onopen = () => {
+      if (unmountedRef.current) { ws.close(); return }
+      attemptRef.current = 0          // reset backoff on success
       setConnected(true)
-      // Re-subscribe to all channels
-      subscriptionsRef.current.forEach((handler, channel) => {
-        ws.send(JSON.stringify({ type: 'subscribe', channel }))
+      // Re-subscribe to all active channels after reconnect
+      subscriptionsRef.current.forEach((_, channel) => {
+        try { ws.send(JSON.stringify({ type: 'subscribe', channel })) } catch {}
       })
     }
 
     ws.onclose = () => {
       setConnected(false)
-      // Auto-reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(connect, 3000)
+      if (unmountedRef.current) return
+      const delay = backoffMs(attemptRef.current)
+      attemptRef.current += 1
+      reconnectTimerRef.current = setTimeout(connect, delay)
     }
 
     ws.onerror = () => {
-      ws.close()
+      // onclose fires right after onerror — nothing to do here
     }
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        const { channel } = data
+        const channel = data?.channel
+        if (!channel) return
         const handlers = subscriptionsRef.current.get(channel)
-        if (handlers) {
-          handlers.forEach(handler => handler(data))
-        }
-      } catch (e) {
-        console.error('WebSocket message error:', e)
+        if (handlers) handlers.forEach((h) => h(data))
+      } catch {
+        // Malformed message — ignore
       }
     }
+  }, []) // stable — no deps
 
-    wsRef.current = ws
-  }, [])
-
+  // Mount once; reconnect when user logs in/out (token changes)
   useEffect(() => {
+    unmountedRef.current = false
     connect()
+
     return () => {
+      unmountedRef.current = true
+      clearTimeout(reconnectTimerRef.current)
       if (wsRef.current) {
+        wsRef.current.onclose = null   // prevent reconnect loop on deliberate close
         wsRef.current.close()
+        wsRef.current = null
       }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
+      setConnected(false)
+    }
+  }, [connect])
+
+  // When the user logs in/out reconnect immediately with the correct token
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    function onStorageChange(e) {
+      if (e.key === 'access_token') {
+        clearTimeout(reconnectTimerRef.current)
+        attemptRef.current = 0
+        if (wsRef.current) {
+          wsRef.current.onclose = null
+          wsRef.current.close()
+          wsRef.current = null
+        }
+        setConnected(false)
+        connect()
       }
     }
-  }, [connect, user?.id])
+    window.addEventListener('storage', onStorageChange)
+    return () => window.removeEventListener('storage', onStorageChange)
+  }, [connect])
 
   const subscribe = useCallback((channel, handler) => {
     if (!subscriptionsRef.current.has(channel)) {
@@ -76,18 +110,18 @@ export function WebSocketProvider({ children }) {
     subscriptionsRef.current.get(channel).add(handler)
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'subscribe', channel }))
+      try { wsRef.current.send(JSON.stringify({ type: 'subscribe', channel })) } catch {}
     }
 
+    // Return an unsubscribe function
     return () => {
       const handlers = subscriptionsRef.current.get(channel)
-      if (handlers) {
-        handlers.delete(handler)
-        if (handlers.size === 0) {
-          subscriptionsRef.current.delete(channel)
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'unsubscribe', channel }))
-          }
+      if (!handlers) return
+      handlers.delete(handler)
+      if (handlers.size === 0) {
+        subscriptionsRef.current.delete(channel)
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          try { wsRef.current.send(JSON.stringify({ type: 'unsubscribe', channel })) } catch {}
         }
       }
     }
@@ -96,7 +130,7 @@ export function WebSocketProvider({ children }) {
   const unsubscribe = useCallback((channel) => {
     subscriptionsRef.current.delete(channel)
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'unsubscribe', channel }))
+      try { wsRef.current.send(JSON.stringify({ type: 'unsubscribe', channel })) } catch {}
     }
   }, [])
 

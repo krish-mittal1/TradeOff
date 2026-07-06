@@ -1,11 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* ── Theme tokens ──────────────────────────────── */
   :root {
+    --t-body:    #f5f6f8;
+    --t-surface: #ffffff;
+    --t-header:  rgba(255,255,255,0.92);
+    --t-panel:   #ffffff;
+    --t-border:  rgba(0,0,0,0.08);
+    --t-text:    #1e293b;
+    --t-text2:   #64748b;
+    --t-text3:   #94a3b8;
+    --t-hover:   rgba(0,0,0,0.04);
+    --t-modal:   #ffffff;
+    --t-input:   rgba(0,0,0,0.03);
+    --t-shadow:  rgba(0,0,0,0.06);
+    --t-chart-bg: #ffffff;
+    --t-donut-track: rgba(0,0,0,0.06);
+
     --background: 222 47% 4%;
     --foreground: 213 31% 85%;
     --card: 222 47% 6%;
@@ -29,6 +46,21 @@
   }
 
   .dark {
+    --t-body:    #070a0f;
+    --t-surface: #0b0f16;
+    --t-header:  rgba(9,12,18,0.95);
+    --t-panel:   #0b0f16;
+    --t-border:  rgba(255,255,255,0.06);
+    --t-text:    #e2e8f0;
+    --t-text2:   #94a3b8;
+    --t-text3:   #475569;
+    --t-hover:   rgba(255,255,255,0.04);
+    --t-modal:   #0d1118;
+    --t-input:   rgba(255,255,255,0.03);
+    --t-shadow:  rgba(0,0,0,0.3);
+    --t-chart-bg: #0b0f16;
+    --t-donut-track: rgba(255,255,255,0.05);
+
     --background: 222 47% 4%;
     --foreground: 213 31% 85%;
   }
@@ -46,12 +78,13 @@
   }
 
   body {
-    background-color: #070a0f;
-    color: #cbd5e1;
+    background-color: var(--t-body);
+    color: var(--t-text2);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     font-feature-settings: 'rlig' 1, 'calt' 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   button,
@@ -63,48 +96,199 @@
 @layer components {
   /* ── Panel ──────────────────────────────────────── */
   .panel {
-    @apply rounded-xl border border-white/5 bg-[#0b0f16];
+    @apply rounded-xl;
+    background: var(--t-panel);
+    border: 1px solid var(--t-border);
+    box-shadow: 0 1px 3px var(--t-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  }
+  html:not(.dark) .panel {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
   }
 
   .panel-title {
-    @apply flex h-10 shrink-0 items-center justify-between border-b border-white/5 px-3 text-xs font-medium text-slate-300;
+    @apply flex h-10 shrink-0 items-center justify-between px-3 text-xs font-semibold tracking-wide;
+    color: var(--t-text);
+    border-bottom: 1px solid var(--t-border);
   }
 
   /* ── Icon button ────────────────────────────────── */
   .icon-button {
-    @apply grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-white/5 hover:text-slate-200;
+    @apply grid h-9 w-9 place-items-center rounded-lg transition-all duration-200 active:scale-95;
+    color: var(--t-text3);
+  }
+  .icon-button:hover {
+    background: var(--t-hover);
+    color: var(--t-text);
   }
 
   /* ── Auth inputs ────────────────────────────────── */
   .auth-label {
-    @apply block text-xs text-slate-500;
+    @apply block text-xs font-medium;
+    color: var(--t-text3);
   }
 
   .auth-input {
-    @apply mt-2 block w-full rounded-lg border border-white/5 bg-white/[0.035] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-amber-400/30 focus:ring-0;
+    @apply mt-2 block w-full rounded-lg px-3 py-2.5 text-sm transition-colors focus:border-amber-400/40 focus:ring-0;
+    border: 1px solid var(--t-border);
+    background: var(--t-input);
+    color: var(--t-text);
   }
+  .auth-input::placeholder { color: var(--t-text3); }
 
   /* ── Stat card ──────────────────────────────────── */
   .stat-card {
-    @apply rounded-xl border border-white/5 bg-[#0b0f16];
+    @apply rounded-xl;
+    background: var(--t-panel);
+    border: 1px solid var(--t-border);
+    box-shadow: 0 1px 3px var(--t-shadow);
   }
 
   /* ── Asset row hover ────────────────────────────── */
   .asset-row {
-    @apply transition hover:bg-white/[0.025];
+    @apply transition-colors duration-150;
   }
+  .asset-row:hover { background: var(--t-hover); }
 
   /* ── Hero card (product shell) ──────────────────── */
   .hero-card {
-    @apply flex items-center justify-between rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.025] to-white/[0.01] px-6 py-5;
+    @apply flex items-center justify-between rounded-2xl px-6 py-5;
+    border: 1px solid var(--t-border);
+    box-shadow: 0 4px 24px var(--t-shadow);
+  }
+  .dark .hero-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.005) 100%);
+  }
+  html:not(.dark) .hero-card {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(255, 255, 255, 0.5) 100%);
   }
 
   .eyebrow {
     @apply mb-1 text-[11px] uppercase tracking-[0.2em] text-amber-400/70;
   }
+
+  /* ── Premium button styles ─────────────────────── */
+  .btn-primary {
+    @apply rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-semibold text-[#0b0e14] transition-all duration-200 hover:bg-amber-300 hover:shadow-lg hover:shadow-amber-400/20 active:scale-[0.98];
+  }
+
+  .btn-buy {
+    @apply rounded-lg py-2.5 text-sm font-bold text-white transition-all duration-200 active:scale-[0.98];
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.25);
+  }
+  .btn-buy:hover {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+  }
+
+  .btn-sell {
+    @apply rounded-lg py-2.5 text-sm font-bold text-white transition-all duration-200 active:scale-[0.98];
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 2px 12px rgba(239, 68, 68, 0.25);
+  }
+  .btn-sell:hover {
+    background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
+  }
 }
 
-/* ── Scrollbar ──────────────────────────────────────── */
+/* ── Mono font for numbers ─────────────────────────── */
+.font-mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* ── Light-mode overrides for hardcoded colors ─────── */
+html:not(.dark) {
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  --border: 220 13% 90%;
+  --input: 220 13% 90%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+}
+
+/* Text color overrides for light mode */
+html:not(.dark) .text-white    { color: #1e293b !important; }
+html:not(.dark) .text-slate-200 { color: #334155 !important; }
+html:not(.dark) .text-slate-300 { color: #475569 !important; }
+html:not(.dark) .text-slate-400 { color: #64748b !important; }
+html:not(.dark) .text-slate-500 { color: #94a3b8 !important; }
+html:not(.dark) .text-slate-600 { color: #94a3b8 !important; }
+html:not(.dark) .text-slate-700 { color: #cbd5e1 !important; }
+
+/* Surface overrides for light mode */
+html:not(.dark) .bg-\[\#070a0f\]  { background-color: #f5f6f8 !important; }
+html:not(.dark) .bg-\[\#090c12\]  { background-color: rgba(255,255,255,0.92) !important; }
+html:not(.dark) .bg-\[\#080b11\]  { background-color: rgba(255,255,255,0.95) !important; }
+html:not(.dark) .bg-\[\#0b0f16\]  { background-color: #ffffff !important; }
+html:not(.dark) .bg-\[\#0b0e14\]  { background-color: #f5f6f8 !important; }
+html:not(.dark) .bg-\[\#0d1118\]  { background-color: #ffffff !important; }
+html:not(.dark) .bg-\[\#10141d\]  { background-color: #ffffff !important; }
+html:not(.dark) .bg-\[\#090c12\]\/95 { background-color: rgba(255,255,255,0.95) !important; }
+
+/* Border overrides for light mode */
+html:not(.dark) .border-white\/5,
+html:not(.dark) .border-white\/\[0\.06\],
+html:not(.dark) .border-white\/\[0\.08\],
+html:not(.dark) .border-white\/10,
+html:not(.dark) .border-white\/\[0\.04\] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Background tints for light mode */
+html:not(.dark) .bg-white\/\[0\.025\],
+html:not(.dark) .bg-white\/\[0\.02\],
+html:not(.dark) .bg-white\/\[0\.03\],
+html:not(.dark) .bg-white\/\[0\.035\],
+html:not(.dark) .bg-white\/\[0\.04\],
+html:not(.dark) .bg-white\/5,
+html:not(.dark) .bg-white\/\[0\.06\] {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Hover backgrounds for light mode */
+html:not(.dark) .hover\:bg-white\/5:hover,
+html:not(.dark) .hover\:bg-white\/\[0\.05\]:hover,
+html:not(.dark) .hover\:bg-white\/\[0\.025\]:hover,
+html:not(.dark) .hover\:bg-white\/\[0\.06\]:hover,
+html:not(.dark) .hover\:bg-white\/\[0\.04\]:hover,
+html:not(.dark) .hover\:bg-white\/\[0\.09\]:hover,
+html:not(.dark) .hover\:bg-white\/\[0\.08\]:hover {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Toast + modal backdrop for light mode */
+html:not(.dark) .bg-black\/80 { background-color: rgba(0,0,0,0.4) !important; }
+
+/* Chart cover div adapts to theme */
+html:not(.dark) .tv-lightweight-charts + div { background: #ffffff !important; }
+
+/* Scrollbar for light mode */
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+/* Selection */
+html:not(.dark) ::selection {
+  background: rgba(245, 158, 11, 0.2);
+  color: #1e293b;
+}
+.dark ::selection {
+  background: rgba(245, 158, 11, 0.3);
+  color: white;
+}
+
+/* ── Scrollbar (dark) ──────────────────────────────── */
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -115,35 +299,46 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
 }
 
 /* ── Flash animations (order book) ─────────────────── */
 @keyframes flash-green {
-  0% { background-color: rgba(34, 197, 94, 0.18); }
+  0% { background-color: rgba(16, 185, 129, 0.15); }
   100% { background-color: transparent; }
 }
 
 @keyframes flash-red {
-  0% { background-color: rgba(239, 68, 68, 0.18); }
+  0% { background-color: rgba(239, 68, 68, 0.15); }
   100% { background-color: transparent; }
 }
 
-.flash-green { animation: flash-green 0.5s ease-out; }
-.flash-red   { animation: flash-red 0.5s ease-out; }
+.flash-green { animation: flash-green 0.6s ease-out; }
+.flash-red   { animation: flash-red 0.6s ease-out; }
 
 /* ── Slide-up animation ─────────────────────────────── */
 @keyframes slide-up {
-  from { transform: translateY(6px); opacity: 0; }
+  from { transform: translateY(8px); opacity: 0; }
   to   { transform: translateY(0);   opacity: 1; }
 }
 
-.animate-slide-up { animation: slide-up 0.2s ease-out; }
+.animate-slide-up { animation: slide-up 0.25s ease-out; }
+
+/* ── Fade in ─────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
+
+/* ── Pulse glow (for live indicator) ─────────────────── */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 
 /* ── lightweight-charts: make it fill parent ────────── */
 .tv-lightweight-charts,
@@ -151,3 +346,8 @@
   width: 100% !important;
   height: 100% !important;
 }
+
+/* Hide TradingView watermark / logo */
+.tv-lightweight-charts tr:last-child td:last-child { display: none !important; }
+.tv-lightweight-charts td:last-child               { display: none !important; }
+.tv-lightweight-charts a[href*="tradingview"]       { display: none !important; }
